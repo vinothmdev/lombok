@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2017 The Project Lombok Authors.
+ * Copyright (C) 2009-2018 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -50,11 +50,18 @@ import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
  * Javac specific version of the LombokNode class.
  */
 public class JavacNode extends lombok.core.LombokNode<JavacAST, JavacNode, JCTree> {
+	private JavacAST ast;
 	/**
 	 * Passes through to the parent constructor.
 	 */
 	public JavacNode(JavacAST ast, JCTree node, List<JavacNode> children, Kind kind) {
-		super(ast, node, children, kind);
+		super(node, children, kind);
+		this.ast = ast;
+	}
+	
+	@Override 
+	public JavacAST getAst() {
+		return ast;
 	}
 	
 	public Element getElement() {
@@ -306,6 +313,12 @@ public class JavacNode extends lombok.core.LombokNode<JavacAST, JavacNode, JCTre
 	
 	@Override public boolean isEnumMember() {
 		if (getKind() != Kind.FIELD) return false;
+		JCModifiers mods = getModifiers();
+		return mods != null && (Flags.ENUM & mods.flags) != 0;
+	}
+	
+	@Override public boolean isEnumType() {
+		if (getKind() != Kind.TYPE) return false;
 		JCModifiers mods = getModifiers();
 		return mods != null && (Flags.ENUM & mods.flags) != 0;
 	}

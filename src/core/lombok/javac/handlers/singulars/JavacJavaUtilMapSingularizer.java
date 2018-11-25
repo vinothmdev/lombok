@@ -40,6 +40,7 @@ import org.mangosdk.spi.ProviderFor;
 
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCBlock;
 import com.sun.tools.javac.tree.JCTree.JCExpression;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
@@ -135,6 +136,7 @@ public class JavacJavaUtilMapSingularizer extends JavacJavaUtilSingularizer {
 		JCBlock body = maker.Block(0, statements);
 		Name methodName = builderType.toName(HandlerUtil.buildAccessorName("clear", data.getPluralName().toString()));
 		JCMethodDecl method = maker.MethodDef(mods, methodName, returnType, typeParams, params, thrown, body, null);
+		recursiveSetGeneratedBy(method, source, builderType.getContext());
 		injectMethod(builderType, method);
 	}
 	
@@ -165,9 +167,16 @@ public class JavacJavaUtilMapSingularizer extends JavacJavaUtilSingularizer {
 		if (!fluent) name = builderType.toName(HandlerUtil.buildAccessorName("put", name.toString()));
 		JCExpression paramTypeKey = cloneParamType(0, maker, data.getTypeArgs(), builderType, source);
 		JCExpression paramTypeValue = cloneParamType(1, maker, data.getTypeArgs(), builderType, source);
-		JCVariableDecl paramKey = maker.VarDef(maker.Modifiers(paramFlags), keyName, paramTypeKey, null);
-		JCVariableDecl paramValue = maker.VarDef(maker.Modifiers(paramFlags), valueName, paramTypeValue, null);
+		List<JCAnnotation> typeUseAnnsKey = getTypeUseAnnotations(paramTypeKey);
+		List<JCAnnotation> typeUseAnnsValue = getTypeUseAnnotations(paramTypeValue);
+		paramTypeKey = removeTypeUseAnnotations(paramTypeKey);
+		paramTypeValue = removeTypeUseAnnotations(paramTypeValue);
+		JCModifiers paramModsKey = typeUseAnnsKey.isEmpty() ? maker.Modifiers(paramFlags) : maker.Modifiers(paramFlags, typeUseAnnsKey);
+		JCModifiers paramModsValue = typeUseAnnsValue.isEmpty() ? maker.Modifiers(paramFlags) : maker.Modifiers(paramFlags, typeUseAnnsValue);
+		JCVariableDecl paramKey = maker.VarDef(paramModsKey, keyName, paramTypeKey, null);
+		JCVariableDecl paramValue = maker.VarDef(paramModsValue, valueName, paramTypeValue, null);
 		JCMethodDecl method = maker.MethodDef(mods, name, returnType, typeParams, List.of(paramKey, paramValue), thrown, body, null);
+		recursiveSetGeneratedBy(method, source, builderType.getContext());
 		injectMethod(builderType, method);
 	}
 
@@ -200,6 +209,7 @@ public class JavacJavaUtilMapSingularizer extends JavacJavaUtilSingularizer {
 		paramType = addTypeArgs(2, true, builderType, paramType, data.getTypeArgs(), source);
 		JCVariableDecl param = maker.VarDef(maker.Modifiers(paramFlags), data.getPluralName(), paramType, null);
 		JCMethodDecl method = maker.MethodDef(mods, name, returnType, typeParams, List.of(param), jceBlank, body, null);
+		recursiveSetGeneratedBy(method, source, builderType.getContext());
 		injectMethod(builderType, method);
 	}
 	

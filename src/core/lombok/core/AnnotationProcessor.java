@@ -46,6 +46,7 @@ import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic.Kind;
 
 import lombok.patcher.ClassRootFinder;
+import lombok.permit.Permit;
 
 @SupportedAnnotationTypes("*")
 public class AnnotationProcessor extends AbstractProcessor {
@@ -72,15 +73,7 @@ public class AnnotationProcessor extends AbstractProcessor {
 	 * the delegate ProcessingEnvironment of the gradle wrapper is returned.
 	 */
 	public static ProcessingEnvironment getJavacProcessingEnvironment(ProcessingEnvironment procEnv, List<String> delayedWarnings) {
-		ProcessingEnvironment javacProcEnv = tryRecursivelyObtainJavacProcessingEnvironment(procEnv);
-		
-		if (javacProcEnv == null) {
-			if (!procEnv.getClass().getName().startsWith("org.eclipse.jdt.")) {
-				delayedWarnings.add("Can't get the delegate of the gradle IncrementalProcessingEnvironment.");
-			}
-		}
-		
-		return javacProcEnv;
+		return tryRecursivelyObtainJavacProcessingEnvironment(procEnv);
 	}
 	
 	private static ProcessingEnvironment tryRecursivelyObtainJavacProcessingEnvironment(ProcessingEnvironment procEnv) {
@@ -90,8 +83,7 @@ public class AnnotationProcessor extends AbstractProcessor {
 		
 		for (Class<?> procEnvClass = procEnv.getClass(); procEnvClass != null; procEnvClass = procEnvClass.getSuperclass()) {
 			try {
-				Field field = procEnvClass.getDeclaredField("delegate");
-				field.setAccessible(true);
+				Field field = Permit.getField(procEnvClass, "delegate");
 				Object delegate = field.get(procEnv);
 				
 				return tryRecursivelyObtainJavacProcessingEnvironment((ProcessingEnvironment) delegate);
@@ -111,6 +103,9 @@ public class AnnotationProcessor extends AbstractProcessor {
 		}
 		
 		@Override boolean want(ProcessingEnvironment procEnv, List<String> delayedWarnings) {
+			// do not run on ECJ as it may print warnings
+			if (procEnv.getClass().getName().startsWith("org.eclipse.jdt.")) return false;
+			
 			ProcessingEnvironment javacProcEnv = getJavacProcessingEnvironment(procEnv, delayedWarnings);
 			
 			if (javacProcEnv == null) return false;
@@ -141,7 +136,7 @@ public class AnnotationProcessor extends AbstractProcessor {
 			ClassLoader environmentClassLoader = procEnv.getClass().getClassLoader();
 			if (environmentClassLoader != null && environmentClassLoader.getClass().getCanonicalName().equals("org.codehaus.plexus.compiler.javac.IsolatedClassLoader")) {
 				if (!ClassLoader_lombokAlreadyAddedTo.getAndSet(environmentClassLoader, true)) {
-					Method m = environmentClassLoader.getClass().getDeclaredMethod("addURL", URL.class);
+					Method m = Permit.getMethod(environmentClassLoader.getClass(), "addURL", URL.class);
 					URL selfUrl = new File(ClassRootFinder.findClassRootOfClass(AnnotationProcessor.class)).toURI().toURL();
 					m.invoke(environmentClassLoader, selfUrl);
 				}
@@ -210,7 +205,7 @@ public class AnnotationProcessor extends AbstractProcessor {
 		for (TypeElement elem : annotations) {
 			zeroElems = false;
 			Name n = elem.getQualifiedName();
-			if (n.length() > 7 && n.subSequence(0, 7).toString().equals("lombok.")) continue;
+			if (n.toString().startsWith("lombok.")) continue;
 			onlyLombok = false;
 		}
 		

@@ -39,6 +39,7 @@ import java.util.concurrent.ConcurrentMap;
 
 import lombok.core.configuration.ConfigurationKey;
 import lombok.core.debug.HistogramTracker;
+import lombok.permit.Permit;
 
 /**
  * Lombok wraps the AST produced by a target platform into its own AST system, mostly because both Eclipse and javac
@@ -216,19 +217,19 @@ public abstract class AST<A extends AST<A, L, N>, L extends LombokNode<A, L, N>,
 		}
 	}
 	
-	private static final ConcurrentMap<Class<?>, Collection<FieldAccess>> fieldsOfASTClasses = new ConcurrentHashMap<Class<?>, Collection<FieldAccess>>();
+	private static final ConcurrentMap<Class<?>, FieldAccess[]> fieldsOfASTClasses = new ConcurrentHashMap<Class<?>, FieldAccess[]>();
 	
 	/** Returns FieldAccess objects for the stated class. Each field that contains objects of the kind returned by
 	 * {@link #getStatementTypes()}, either directly or inside of an array or java.util.collection (or array-of-arrays,
 	 * or collection-of-collections, et cetera), is returned.
 	 */
-	protected Collection<FieldAccess> fieldsOf(Class<?> c) {
-		Collection<FieldAccess> fields = fieldsOfASTClasses.get(c);
+	protected FieldAccess[] fieldsOf(Class<?> c) {
+		FieldAccess[] fields = fieldsOfASTClasses.get(c);
 		if (fields != null) return fields;
 		
-		fields = new ArrayList<FieldAccess>();
-		getFields(c, fields);
-		fieldsOfASTClasses.putIfAbsent(c, fields);
+		List<FieldAccess> fieldList = new ArrayList<FieldAccess>();
+		getFields(c, fieldList);
+		fieldsOfASTClasses.putIfAbsent(c, fieldList.toArray(new FieldAccess[fieldList.size()]));
 		return fieldsOfASTClasses.get(c);
 	}
 	
@@ -252,7 +253,7 @@ public abstract class AST<A extends AST<A, L, N>, L extends LombokNode<A, L, N>,
 			}
 			
 			if (shouldDrill(c, t, f.getName())) {
-				f.setAccessible(true);
+				Permit.setAccessible(f);
 				fields.add(new FieldAccess(f, dim));
 			}
 		}

@@ -39,6 +39,7 @@ import lombok.javac.handlers.JavacSingularsRecipes.StatementMaker;
 
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCBlock;
 import com.sun.tools.javac.tree.JCTree.JCExpression;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
@@ -91,6 +92,7 @@ abstract class JavacGuavaSingularizer extends JavacSingularizer {
 		JCBlock body = maker.Block(0, statements);
 		Name methodName = builderType.toName(HandlerUtil.buildAccessorName("clear", data.getPluralName().toString()));
 		JCMethodDecl method = maker.MethodDef(mods, methodName, returnType, typeParams, params, thrown, body, null);
+		recursiveSetGeneratedBy(method, source, builderType.getContext());
 		injectMethod(builderType, method);
 	}
 	
@@ -125,11 +127,15 @@ abstract class JavacGuavaSingularizer extends JavacSingularizer {
 		ListBuffer<JCVariableDecl> params = new ListBuffer<JCVariableDecl>();
 		for (int i = 0; i < suffixes.size(); i++) {
 			JCExpression pt = cloneParamType(i, maker, data.getTypeArgs(), builderType, source);
-			JCVariableDecl p = maker.VarDef(maker.Modifiers(paramFlags), names[i], pt, null);
+			List<JCAnnotation> typeUseAnns = getTypeUseAnnotations(pt);
+			pt = removeTypeUseAnnotations(pt);
+			JCModifiers paramMods = typeUseAnns.isEmpty() ? maker.Modifiers(paramFlags) : maker.Modifiers(paramFlags, typeUseAnns);
+			JCVariableDecl p = maker.VarDef(paramMods, names[i], pt, null);
 			params.append(p);
 		}
 		
 		JCMethodDecl method = maker.MethodDef(mods, methodName, returnType, typeParams, params.toList(), thrown, body, null);
+		recursiveSetGeneratedBy(method, source, builderType.getContext());
 		injectMethod(builderType, method);
 	}
 	
@@ -157,6 +163,7 @@ abstract class JavacGuavaSingularizer extends JavacSingularizer {
 		paramType = addTypeArgs(getTypeArgumentsCount(), true, builderType, paramType, data.getTypeArgs(), source);
 		JCVariableDecl param = maker.VarDef(maker.Modifiers(paramFlags), data.getPluralName(), paramType, null);
 		JCMethodDecl method = maker.MethodDef(mods, methodName, returnType, typeParams, List.of(param), thrown, body, null);
+		recursiveSetGeneratedBy(method, source, builderType.getContext());
 		injectMethod(builderType, method);
 	}
 	
@@ -165,13 +172,13 @@ abstract class JavacGuavaSingularizer extends JavacSingularizer {
 		List<JCExpression> jceBlank = List.nil();
 		
 		JCExpression varType = chainDotsString(builderType, data.getTargetFqn());
-		int agrumentsCount = getTypeArgumentsCount();
-		varType = addTypeArgs(agrumentsCount, false, builderType, varType, data.getTypeArgs(), source);
+		int argumentsCount = getTypeArgumentsCount();
+		varType = addTypeArgs(argumentsCount, false, builderType, varType, data.getTypeArgs(), source);
 		
 		JCExpression empty; {
 			//ImmutableX.of()
 			JCExpression emptyMethod = chainDots(builderType, "com", "google", "common", "collect", getSimpleTargetTypeName(data), "of");
-			List<JCExpression> invokeTypeArgs = createTypeArgs(agrumentsCount, false, builderType, data.getTypeArgs(), source);
+			List<JCExpression> invokeTypeArgs = createTypeArgs(argumentsCount, false, builderType, data.getTypeArgs(), source);
 			empty = maker.Apply(invokeTypeArgs, emptyMethod, jceBlank);
 		}
 		
