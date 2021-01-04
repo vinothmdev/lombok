@@ -1,21 +1,27 @@
 import java.util.List;
-@lombok.Builder class BuilderSimple<T> {
-  public static @java.lang.SuppressWarnings("all") class BuilderSimpleBuilder<T> {
+@lombok.Builder(access = lombok.AccessLevel.PROTECTED) class BuilderSimple<T> {
+  protected static @java.lang.SuppressWarnings("all") class BuilderSimpleBuilder<T> {
     private @java.lang.SuppressWarnings("all") int yes;
     private @java.lang.SuppressWarnings("all") List<T> also;
     @java.lang.SuppressWarnings("all") BuilderSimpleBuilder() {
       super();
     }
-    public @java.lang.SuppressWarnings("all") BuilderSimpleBuilder<T> yes(final int yes) {
+    /**
+     * @return {@code this}.
+     */
+    public @java.lang.SuppressWarnings("all") BuilderSimple.BuilderSimpleBuilder<T> yes(final int yes) {
       this.yes = yes;
       return this;
     }
-    public @java.lang.SuppressWarnings("all") BuilderSimpleBuilder<T> also(final List<T> also) {
+    /**
+     * @return {@code this}.
+     */
+    public @java.lang.SuppressWarnings("all") BuilderSimple.BuilderSimpleBuilder<T> also(final List<T> also) {
       this.also = also;
       return this;
     }
     public @java.lang.SuppressWarnings("all") BuilderSimple<T> build() {
-      return new BuilderSimple<T>(yes, also);
+      return new BuilderSimple<T>(this.yes, this.also);
     }
     public @java.lang.Override @java.lang.SuppressWarnings("all") java.lang.String toString() {
       return (((("BuilderSimple.BuilderSimpleBuilder(yes=" + this.yes) + ", also=") + this.also) + ")");
@@ -30,7 +36,7 @@ import java.util.List;
     this.yes = yes;
     this.also = also;
   }
-  public static @java.lang.SuppressWarnings("all") <T>BuilderSimpleBuilder<T> builder() {
-    return new BuilderSimpleBuilder<T>();
+  protected static @java.lang.SuppressWarnings("all") <T>BuilderSimple.BuilderSimpleBuilder<T> builder() {
+    return new BuilderSimple.BuilderSimpleBuilder<T>();
   }
 }

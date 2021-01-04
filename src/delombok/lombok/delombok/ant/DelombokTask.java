@@ -154,10 +154,6 @@ class Tasks {
 			path.add(set);
 		}
 		
-		public Format createFormat() {
-			return new Format();
-		}
-		
 		public void addFormat(Format format) {
 			formatOptions.add(format);
 		}
@@ -181,9 +177,11 @@ class Tasks {
 				}
 				
 				return Class.forName(name, true, shadowLoader);
-			} catch (Exception e) {
-				if (e instanceof RuntimeException) throw (RuntimeException) e;
-				throw new RuntimeException(e);
+			} catch (Throwable t) {
+				if (t instanceof InvocationTargetException) t = t.getCause();
+				if (t instanceof RuntimeException) throw (RuntimeException) t;
+				if (t instanceof Error) throw (Error) t;
+				throw new RuntimeException(t);
 			}
 		}
 		
@@ -192,7 +190,7 @@ class Tasks {
 			Location loc = getLocation();
 			
 			try {
-				Object instance = shadowLoadClass("lombok.delombok.ant.DelombokTaskImpl").newInstance();
+				Object instance = shadowLoadClass("lombok.delombok.ant.DelombokTaskImpl").getConstructor().newInstance();
 				for (Field selfField : getClass().getDeclaredFields()) {
 					if (selfField.isSynthetic() || Modifier.isStatic(selfField.getModifiers())) continue;
 					Field otherField = instance.getClass().getDeclaredField(selfField.getName());
@@ -211,10 +209,10 @@ class Tasks {
 				
 				Method m = instance.getClass().getMethod("execute", Location.class);
 				m.invoke(instance, loc);
-			} catch (Exception e) {
-				Throwable t = (e instanceof InvocationTargetException) ? ((InvocationTargetException) e).getCause() : e;
-				if (t instanceof Error) throw (Error) t;
+			} catch (Throwable t) {
+				if (t instanceof InvocationTargetException) t = t.getCause();
 				if (t instanceof RuntimeException) throw (RuntimeException) t;
+				if (t instanceof Error) throw (Error) t;
 				throw new RuntimeException(t);
 			}
 		}

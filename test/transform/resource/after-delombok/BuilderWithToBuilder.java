@@ -27,35 +27,47 @@ class BuilderWithToBuilder<T> {
 		@java.lang.SuppressWarnings("all")
 		BuilderWithToBuilderBuilder() {
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public BuilderWithToBuilderBuilder<T> one(final String one) {
+		public BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> one(final String one) {
 			this.one = one;
 			return this;
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public BuilderWithToBuilderBuilder<T> two(final String two) {
+		public BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> two(final String two) {
 			this.two = two;
 			return this;
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public BuilderWithToBuilderBuilder<T> foo(final T foo) {
+		public BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> foo(final T foo) {
 			this.foo = foo;
 			return this;
 		}
 		@java.lang.SuppressWarnings("all")
-		public BuilderWithToBuilderBuilder<T> bar(final T bar) {
+		public BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> bar(final T bar) {
 			if (this.bars == null) this.bars = new java.util.ArrayList<T>();
 			this.bars.add(bar);
 			return this;
 		}
 		@java.lang.SuppressWarnings("all")
-		public BuilderWithToBuilderBuilder<T> bars(final java.util.Collection<? extends T> bars) {
+		public BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> bars(final java.util.Collection<? extends T> bars) {
+			if (bars == null) {
+				throw new java.lang.NullPointerException("bars cannot be null");
+			}
 			if (this.bars == null) this.bars = new java.util.ArrayList<T>();
 			this.bars.addAll(bars);
 			return this;
 		}
 		@java.lang.SuppressWarnings("all")
-		public BuilderWithToBuilderBuilder<T> clearBars() {
+		public BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> clearBars() {
 			if (this.bars != null) this.bars.clear();
 			return this;
 		}
@@ -72,7 +84,7 @@ class BuilderWithToBuilder<T> {
 			default: 
 				bars = java.util.Collections.unmodifiableList(new java.util.ArrayList<T>(this.bars));
 			}
-			return new BuilderWithToBuilder<T>(one, two, foo, bars);
+			return new BuilderWithToBuilder<T>(this.one, this.two, this.foo, bars);
 		}
 		@java.lang.Override
 		@java.lang.SuppressWarnings("all")
@@ -81,12 +93,13 @@ class BuilderWithToBuilder<T> {
 		}
 	}
 	@java.lang.SuppressWarnings("all")
-	public static <T> BuilderWithToBuilderBuilder<T> builder() {
-		return new BuilderWithToBuilderBuilder<T>();
+	public static <T> BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> builder() {
+		return new BuilderWithToBuilder.BuilderWithToBuilderBuilder<T>();
 	}
 	@java.lang.SuppressWarnings("all")
-	public BuilderWithToBuilderBuilder<T> toBuilder() {
-		final BuilderWithToBuilderBuilder<T> builder = new BuilderWithToBuilderBuilder<T>().one(this.mOne).two(this.mTwo).foo(BuilderWithToBuilder.<T>rrr(this));
+	public BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> toBuilder() {
+		final T foo = BuilderWithToBuilder.<T>rrr(this);
+		final BuilderWithToBuilder.BuilderWithToBuilderBuilder<T> builder = new BuilderWithToBuilder.BuilderWithToBuilderBuilder<T>().one(this.mOne).two(this.mTwo).foo(foo);
 		if (this.bars != null) builder.bars(this.bars);
 		return builder;
 	}
@@ -110,24 +123,33 @@ class ConstructorWithToBuilder<T> {
 		@java.lang.SuppressWarnings("all")
 		ConstructorWithToBuilderBuilder() {
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public ConstructorWithToBuilderBuilder<T> mOne(final String mOne) {
+		public ConstructorWithToBuilder.ConstructorWithToBuilderBuilder<T> mOne(final String mOne) {
 			this.mOne = mOne;
 			return this;
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public ConstructorWithToBuilderBuilder<T> baz(final T baz) {
+		public ConstructorWithToBuilder.ConstructorWithToBuilderBuilder<T> baz(final T baz) {
 			this.baz = baz;
 			return this;
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public ConstructorWithToBuilderBuilder<T> bars(final com.google.common.collect.ImmutableList<T> bars) {
+		public ConstructorWithToBuilder.ConstructorWithToBuilderBuilder<T> bars(final com.google.common.collect.ImmutableList<T> bars) {
 			this.bars = bars;
 			return this;
 		}
 		@java.lang.SuppressWarnings("all")
 		public ConstructorWithToBuilder<T> build() {
-			return new ConstructorWithToBuilder<T>(mOne, baz, bars);
+			return new ConstructorWithToBuilder<T>(this.mOne, this.baz, this.bars);
 		}
 		@java.lang.Override
 		@java.lang.SuppressWarnings("all")
@@ -136,11 +158,61 @@ class ConstructorWithToBuilder<T> {
 		}
 	}
 	@java.lang.SuppressWarnings("all")
-	public static <T> ConstructorWithToBuilderBuilder<T> builder() {
-		return new ConstructorWithToBuilderBuilder<T>();
+	public static <T> ConstructorWithToBuilder.ConstructorWithToBuilderBuilder<T> builder() {
+		return new ConstructorWithToBuilder.ConstructorWithToBuilderBuilder<T>();
 	}
 	@java.lang.SuppressWarnings("all")
-	public ConstructorWithToBuilderBuilder<T> toBuilder() {
-		return new ConstructorWithToBuilderBuilder<T>().mOne(this.mOne).baz(this.foo).bars(this.bars);
+	public ConstructorWithToBuilder.ConstructorWithToBuilderBuilder<T> toBuilder() {
+		return new ConstructorWithToBuilder.ConstructorWithToBuilderBuilder<T>().mOne(this.mOne).baz(this.foo).bars(this.bars);
+	}
+}
+class StaticMethodWithToBuilder<T> {
+	private T foo;
+	
+	public StaticMethodWithToBuilder(T foo) {
+		this.foo = foo;
+	}
+
+	public static <T> StaticMethodWithToBuilder<T> of(T foo) {
+		return new StaticMethodWithToBuilder<T>(foo);
+	}
+
+	@java.lang.SuppressWarnings("all")
+	public static class StaticMethodWithToBuilderBuilder<T> {
+		@java.lang.SuppressWarnings("all")
+		private T foo;
+
+		@java.lang.SuppressWarnings("all")
+		StaticMethodWithToBuilderBuilder() {
+		}
+		/**
+		 * @return {@code this}.
+		 */
+		@java.lang.SuppressWarnings("all")
+		public StaticMethodWithToBuilder.StaticMethodWithToBuilderBuilder<T> foo(final T foo) {
+			this.foo = foo;
+			return this;
+		}
+
+		@java.lang.SuppressWarnings("all")
+		public StaticMethodWithToBuilder<T> build() {
+			return StaticMethodWithToBuilder.<T>of(this.foo);
+		}
+
+		@java.lang.Override
+		@java.lang.SuppressWarnings("all")
+		public java.lang.String toString() {
+			return "StaticMethodWithToBuilder.StaticMethodWithToBuilderBuilder(foo=" + this.foo + ")";
+		}
+	}
+
+	@java.lang.SuppressWarnings("all")
+	public static <T> StaticMethodWithToBuilder.StaticMethodWithToBuilderBuilder<T> builder() {
+		return new StaticMethodWithToBuilder.StaticMethodWithToBuilderBuilder<T>();
+	}
+
+	@java.lang.SuppressWarnings("all")
+	public StaticMethodWithToBuilder.StaticMethodWithToBuilderBuilder<T> toBuilder() {
+		return new StaticMethodWithToBuilder.StaticMethodWithToBuilderBuilder<T>().foo(this.foo);
 	}
 }

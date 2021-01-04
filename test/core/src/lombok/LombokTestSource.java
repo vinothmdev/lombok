@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2015 The Project Lombok Authors.
+ * Copyright (C) 2014-2019 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -41,9 +41,13 @@ import org.junit.Assert;
 
 import lombok.core.LombokImmutableList;
 import lombok.core.configuration.BubblingConfigurationResolver;
+import lombok.core.configuration.ConfigurationFile;
+import lombok.core.configuration.ConfigurationFileToSource;
+import lombok.core.configuration.ConfigurationParser;
 import lombok.core.configuration.ConfigurationProblemReporter;
 import lombok.core.configuration.ConfigurationResolver;
-import lombok.core.configuration.StringConfigurationSource;
+import lombok.core.configuration.ConfigurationSource;
+import lombok.core.configuration.SingleConfigurationSource;
 
 public class LombokTestSource {
 	private final File file;
@@ -52,6 +56,7 @@ public class LombokTestSource {
 	private final Map<String, String> formatPreferences;
 	private final boolean ignore;
 	private final boolean skipCompareContent;
+	private final boolean skipIdempotent;
 	private final boolean unchanged;
 	private final int versionLowerLimit, versionUpperLimit;
 	private final ConfigurationResolver configuration;
@@ -60,8 +65,20 @@ public class LombokTestSource {
 
 	public boolean runOnPlatform(String platform) {
 		if (platforms == null || platforms.isEmpty()) return true;
-		for (String pl : platforms) if (pl.equalsIgnoreCase(platform)) return true;
-		return false;
+		int inclusiveCount = 0;
+		for (String pl : platforms) {
+			if (pl.startsWith("!")) continue;
+			inclusiveCount++;
+			if (pl.equalsIgnoreCase(platform)) return true;
+		}
+		if (inclusiveCount == platforms.size()) {
+			return false;
+		}
+		for (String pl : platforms) {
+			if (!pl.startsWith("!")) continue;
+			if (pl.regionMatches(true, 1, platform, 0, platform.length())) return false;
+		}
+		return true;
 	}
 	
 	public boolean versionWithinLimit(int version) {
@@ -92,6 +109,10 @@ public class LombokTestSource {
 		return skipCompareContent;
 	}
 	
+	public boolean isSkipIdempotent() {
+		return skipIdempotent;
+	}
+	
 	public String getSpecifiedEncoding() {
 		return specifiedEncoding;
 	}
@@ -104,10 +125,10 @@ public class LombokTestSource {
 		return formatPreferences;
 	}
 	
-	private static final Pattern VERSION_STYLE_1 = Pattern.compile("^(\\d+)$");
-	private static final Pattern VERSION_STYLE_2 = Pattern.compile("^\\:(\\d+)$");
-	private static final Pattern VERSION_STYLE_3 = Pattern.compile("^(\\d+):$");
-	private static final Pattern VERSION_STYLE_4 = Pattern.compile("^(\\d+):(\\d+)$");
+	private static final Pattern VERSION_STYLE_1 = Pattern.compile("^(\\d+)(?:\\s+.*)?$");
+	private static final Pattern VERSION_STYLE_2 = Pattern.compile("^\\:(\\d+)(?:\\s+.*)?$");
+	private static final Pattern VERSION_STYLE_3 = Pattern.compile("^(\\d+):(?:\\s+.*)?$");
+	private static final Pattern VERSION_STYLE_4 = Pattern.compile("^(\\d+):(\\d+)(?:\\s+.*)?$");
 	
 	private int[] parseVersionLimit(String spec) {
 		/* Single version: '5' */ {
@@ -139,6 +160,7 @@ public class LombokTestSource {
 	private static final Pattern IGNORE_PATTERN = Pattern.compile("^\\s*ignore\\s*(?:[-:].*)?$", Pattern.CASE_INSENSITIVE);
 	private static final Pattern UNCHANGED_PATTERN = Pattern.compile("^\\s*unchanged\\s*(?:[-:].*)?$", Pattern.CASE_INSENSITIVE);
 	private static final Pattern SKIP_COMPARE_CONTENT_PATTERN = Pattern.compile("^\\s*skip[- ]?compare[- ]?contents?\\s*(?:[-:].*)?$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern SKIP_IDEMPOTENT_PATTERN = Pattern.compile("^\\s*skip[- ]?idempotent\\s*(?:[-:].*)?$", Pattern.CASE_INSENSITIVE);
 	
 	private LombokTestSource(File file, String content, List<CompilerMessageMatcher> messages, List<String> directives) {
 		this.file = file;
@@ -150,6 +172,7 @@ public class LombokTestSource {
 		int versionUpper = Integer.MAX_VALUE;
 		boolean ignore = false;
 		boolean skipCompareContent = false;
+		boolean skipIdempotent = false;
 		boolean unchanged = false;
 		String encoding = null;
 		Map<String, String> formats = new HashMap<String, String>();
@@ -170,6 +193,11 @@ public class LombokTestSource {
 			
 			if (SKIP_COMPARE_CONTENT_PATTERN.matcher(directive).matches()) {
 				skipCompareContent = true;
+				continue;
+			}
+			
+			if (SKIP_IDEMPOTENT_PATTERN.matcher(directive).matches()) {
+				skipIdempotent = true;
 				continue;
 			}
 			
@@ -223,15 +251,24 @@ public class LombokTestSource {
 		this.versionUpperLimit = versionUpper;
 		this.ignore = ignore;
 		this.skipCompareContent = skipCompareContent;
+		this.skipIdempotent = skipIdempotent;
 		this.unchanged = unchanged;
 		this.platforms = platformLimit == null ? null : Arrays.asList(platformLimit);
+		
 		ConfigurationProblemReporter reporter = new ConfigurationProblemReporter() {
 			@Override public void report(String sourceDescription, String problem, int lineNumber, CharSequence line) {
 				Assert.fail("Problem on directive line: " + problem + " at conf line #" + lineNumber + " (" + line + ")");
 			}
 		};
+		final ConfigurationFile configurationFile = ConfigurationFile.fromCharSequence(file.getAbsoluteFile().getPath(), conf, ConfigurationFile.getLastModifiedOrMissing(file));
+		final ConfigurationSource source = SingleConfigurationSource.parse(configurationFile, new ConfigurationParser(reporter));
+		ConfigurationFileToSource sourceFinder = new ConfigurationFileToSource() {
+			@Override public ConfigurationSource parsed(ConfigurationFile fileLocation) {
+				return fileLocation.equals(configurationFile) ? source : null;
+			}
+		};
 		
-		this.configuration = new BubblingConfigurationResolver(Collections.singleton(StringConfigurationSource.forString(conf, reporter, file.getAbsolutePath())));
+		this.configuration = new BubblingConfigurationResolver(configurationFile, sourceFinder);
 		this.formatPreferences = Collections.unmodifiableMap(formats);
 	}
 	
@@ -332,5 +369,9 @@ public class LombokTestSource {
 		
 		if (specifiedEncoding == null || specifiedEncoding.equalsIgnoreCase(encoding)) return source;
 		return read0(sourceFolder, messagesFolder, fileName, specifiedEncoding);
+	}
+	
+	public int minVersion() {
+		return Math.max(6, versionLowerLimit);
 	}
 }

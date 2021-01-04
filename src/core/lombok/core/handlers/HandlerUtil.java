@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2018 The Project Lombok Authors.
+ * Copyright (C) 2013-2020 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,6 +27,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import lombok.AllArgsConstructor;
 import lombok.ConfigurationKeys;
@@ -38,6 +40,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.Value;
+import lombok.With;
 import lombok.core.AST;
 import lombok.core.AnnotationValues;
 import lombok.core.JavaIdentifiers;
@@ -47,7 +50,6 @@ import lombok.core.configuration.ConfigurationKey;
 import lombok.core.configuration.FlagUsageType;
 import lombok.experimental.Accessors;
 import lombok.experimental.FieldDefaults;
-import lombok.experimental.Wither;
 
 /**
  * Container for static utility methods useful for some of the standard lombok handlers, regardless of
@@ -76,33 +78,270 @@ public class HandlerUtil {
 		return 43;
 	}
 	
-	public static final List<String> NONNULL_ANNOTATIONS, BASE_COPYABLE_ANNOTATIONS;
+	public static final List<String> NONNULL_ANNOTATIONS, BASE_COPYABLE_ANNOTATIONS, COPY_TO_SETTER_ANNOTATIONS, COPY_TO_BUILDER_SINGULAR_SETTER_ANNOTATIONS, JACKSON_COPY_TO_BUILDER_ANNOTATIONS;
 	static {
 		NONNULL_ANNOTATIONS = Collections.unmodifiableList(Arrays.asList(new String[] {
-			"lombok.NonNull",
-			"javax.annotation.Nonnull",
-			"edu.umd.cs.findbugs.annotations.NonNull",
-			"org.jetbrains.annotations.NotNull",
+			"androidx.annotation.NonNull",
 			"android.support.annotation.NonNull",
+			"com.sun.istack.internal.NotNull",
+			"edu.umd.cs.findbugs.annotations.NonNull",
+			"javax.annotation.Nonnull",
+			// "javax.validation.constraints.NotNull", // The field might contain a null value until it is persisted.
+			"lombok.NonNull",
+			"org.checkerframework.checker.nullness.qual.NonNull",
 			"org.eclipse.jdt.annotation.NonNull",
-			"org.springframework.lang.NonNull"
+			"org.eclipse.jgit.annotations.NonNull",
+			"org.jetbrains.annotations.NotNull",
+			"org.jmlspecs.annotation.NonNull",
+			"org.netbeans.api.annotations.common.NonNull",
+			"org.springframework.lang.NonNull",
 		}));
 		BASE_COPYABLE_ANNOTATIONS = Collections.unmodifiableList(Arrays.asList(new String[] {
-			"lombok.NonNull",
-			"javax.annotation.Nonnull",
-			"edu.umd.cs.findbugs.annotations.NonNull",
-			"org.jetbrains.annotations.NotNull",
+			"androidx.annotation.NonNull",
+			"androidx.annotation.Nullable",
 			"android.support.annotation.NonNull",
-			"org.eclipse.jdt.annotation.NonNull",
-			"org.springframework.lang.NonNull",
-			"javax.annotation.Nullable",
-			"javax.annotation.CheckForNull",
-			"edu.umd.cs.findbugs.annotations.UnknownNullness",
-			"edu.umd.cs.findbugs.annotations.Nullable",
-			"org.jetbrains.annotations.Nullable",
 			"android.support.annotation.Nullable",
+			"edu.umd.cs.findbugs.annotations.NonNull",
+			"edu.umd.cs.findbugs.annotations.Nullable",
+			"edu.umd.cs.findbugs.annotations.UnknownNullness",
+			"javax.annotation.CheckForNull",
+			"javax.annotation.Nonnull",
+			"javax.annotation.Nullable",
+			"lombok.NonNull",
+			"org.jmlspecs.annotation.NonNull",
+			"org.jmlspecs.annotation.Nullable",
+			// To update Checker Framework annotations, run:
+			// grep --recursive --files-with-matches -e '^@Target\b.*TYPE_USE' $CHECKERFRAMEWORK/checker/src/main/java  $CHECKERFRAMEWORK/framework/src/main/java | grep '\.java$' | sed 's/.*\/java\//\t\t\t"/' | sed 's/\.java$/",/' | sed 's/\//./g' | sort
+			// Only add new annotations, do not remove annotations that have been removed from the lastest version of the Checker Framework.
+			"org.checkerframework.checker.compilermsgs.qual.CompilerMessageKey",
+			"org.checkerframework.checker.compilermsgs.qual.CompilerMessageKeyBottom",
+			"org.checkerframework.checker.compilermsgs.qual.UnknownCompilerMessageKey",
+			"org.checkerframework.checker.fenum.qual.AwtAlphaCompositingRule",
+			"org.checkerframework.checker.fenum.qual.AwtColorSpace",
+			"org.checkerframework.checker.fenum.qual.AwtCursorType",
+			"org.checkerframework.checker.fenum.qual.AwtFlowLayout",
+			"org.checkerframework.checker.fenum.qual.Fenum",
+			"org.checkerframework.checker.fenum.qual.FenumBottom",
+			"org.checkerframework.checker.fenum.qual.FenumTop",
+			"org.checkerframework.checker.fenum.qual.PolyFenum",
+			"org.checkerframework.checker.fenum.qual.SwingBoxOrientation",
+			"org.checkerframework.checker.fenum.qual.SwingCompassDirection",
+			"org.checkerframework.checker.fenum.qual.SwingElementOrientation",
+			"org.checkerframework.checker.fenum.qual.SwingHorizontalOrientation",
+			"org.checkerframework.checker.fenum.qual.SwingSplitPaneOrientation",
+			"org.checkerframework.checker.fenum.qual.SwingTextOrientation",
+			"org.checkerframework.checker.fenum.qual.SwingTitleJustification",
+			"org.checkerframework.checker.fenum.qual.SwingTitlePosition",
+			"org.checkerframework.checker.fenum.qual.SwingVerticalOrientation",
+			"org.checkerframework.checker.formatter.qual.Format",
+			"org.checkerframework.checker.formatter.qual.FormatBottom",
+			"org.checkerframework.checker.formatter.qual.InvalidFormat",
+			"org.checkerframework.checker.guieffect.qual.AlwaysSafe",
+			"org.checkerframework.checker.guieffect.qual.PolyUI",
+			"org.checkerframework.checker.guieffect.qual.UI",
+			"org.checkerframework.checker.i18nformatter.qual.I18nFormat",
+			"org.checkerframework.checker.i18nformatter.qual.I18nFormatBottom",
+			"org.checkerframework.checker.i18nformatter.qual.I18nFormatFor",
+			"org.checkerframework.checker.i18nformatter.qual.I18nInvalidFormat",
+			"org.checkerframework.checker.i18nformatter.qual.I18nUnknownFormat",
+			"org.checkerframework.checker.i18n.qual.LocalizableKey",
+			"org.checkerframework.checker.i18n.qual.LocalizableKeyBottom",
+			"org.checkerframework.checker.i18n.qual.Localized",
+			"org.checkerframework.checker.i18n.qual.UnknownLocalizableKey",
+			"org.checkerframework.checker.i18n.qual.UnknownLocalized",
+			"org.checkerframework.checker.index.qual.GTENegativeOne",
+			"org.checkerframework.checker.index.qual.IndexFor",
+			"org.checkerframework.checker.index.qual.IndexOrHigh",
+			"org.checkerframework.checker.index.qual.IndexOrLow",
+			"org.checkerframework.checker.index.qual.LengthOf",
+			"org.checkerframework.checker.index.qual.LessThan",
+			"org.checkerframework.checker.index.qual.LessThanBottom",
+			"org.checkerframework.checker.index.qual.LessThanUnknown",
+			"org.checkerframework.checker.index.qual.LowerBoundBottom",
+			"org.checkerframework.checker.index.qual.LowerBoundUnknown",
+			"org.checkerframework.checker.index.qual.LTEqLengthOf",
+			"org.checkerframework.checker.index.qual.LTLengthOf",
+			"org.checkerframework.checker.index.qual.LTOMLengthOf",
+			"org.checkerframework.checker.index.qual.NegativeIndexFor",
+			"org.checkerframework.checker.index.qual.NonNegative",
+			"org.checkerframework.checker.index.qual.PolyIndex",
+			"org.checkerframework.checker.index.qual.PolyLength",
+			"org.checkerframework.checker.index.qual.PolyLowerBound",
+			"org.checkerframework.checker.index.qual.PolySameLen",
+			"org.checkerframework.checker.index.qual.PolyUpperBound",
+			"org.checkerframework.checker.index.qual.Positive",
+			"org.checkerframework.checker.index.qual.SameLen",
+			"org.checkerframework.checker.index.qual.SameLenBottom",
+			"org.checkerframework.checker.index.qual.SameLenUnknown",
+			"org.checkerframework.checker.index.qual.SearchIndexBottom",
+			"org.checkerframework.checker.index.qual.SearchIndexFor",
+			"org.checkerframework.checker.index.qual.SearchIndexUnknown",
+			"org.checkerframework.checker.index.qual.SubstringIndexBottom",
+			"org.checkerframework.checker.index.qual.SubstringIndexFor",
+			"org.checkerframework.checker.index.qual.SubstringIndexUnknown",
+			"org.checkerframework.checker.index.qual.UpperBoundBottom",
+			"org.checkerframework.checker.index.qual.UpperBoundUnknown",
+			"org.checkerframework.checker.initialization.qual.FBCBottom",
+			"org.checkerframework.checker.initialization.qual.Initialized",
+			"org.checkerframework.checker.initialization.qual.UnderInitialization",
+			"org.checkerframework.checker.initialization.qual.UnknownInitialization",
+			"org.checkerframework.checker.interning.qual.Interned",
+			"org.checkerframework.checker.interning.qual.InternedDistinct",
+			"org.checkerframework.checker.interning.qual.PolyInterned",
+			"org.checkerframework.checker.interning.qual.UnknownInterned",
+			"org.checkerframework.checker.lock.qual.GuardedBy",
+			"org.checkerframework.checker.lock.qual.GuardedByBottom",
+			"org.checkerframework.checker.lock.qual.GuardedByUnknown",
+			"org.checkerframework.checker.lock.qual.GuardSatisfied",
+			"org.checkerframework.checker.nullness.qual.KeyFor",
+			"org.checkerframework.checker.nullness.qual.KeyForBottom",
+			"org.checkerframework.checker.nullness.qual.MonotonicNonNull",
+			"org.checkerframework.checker.nullness.qual.NonNull",
+			"org.checkerframework.checker.nullness.qual.NonRaw",
+			"org.checkerframework.checker.nullness.qual.Nullable",
+			"org.checkerframework.checker.nullness.qual.PolyKeyFor",
+			"org.checkerframework.checker.nullness.qual.PolyNull",
+			"org.checkerframework.checker.nullness.qual.PolyRaw",
+			"org.checkerframework.checker.nullness.qual.Raw",
+			"org.checkerframework.checker.nullness.qual.UnknownKeyFor",
+			"org.checkerframework.checker.optional.qual.MaybePresent",
+			"org.checkerframework.checker.optional.qual.PolyPresent",
+			"org.checkerframework.checker.optional.qual.Present",
+			"org.checkerframework.checker.propkey.qual.PropertyKey",
+			"org.checkerframework.checker.propkey.qual.PropertyKeyBottom",
+			"org.checkerframework.checker.propkey.qual.UnknownPropertyKey",
+			"org.checkerframework.checker.regex.qual.PolyRegex",
+			"org.checkerframework.checker.regex.qual.Regex",
+			"org.checkerframework.checker.regex.qual.RegexBottom",
+			"org.checkerframework.checker.regex.qual.UnknownRegex",
+			"org.checkerframework.checker.signature.qual.BinaryName",
+			"org.checkerframework.checker.signature.qual.BinaryNameInUnnamedPackage",
+			"org.checkerframework.checker.signature.qual.ClassGetName",
+			"org.checkerframework.checker.signature.qual.ClassGetSimpleName",
+			"org.checkerframework.checker.signature.qual.DotSeparatedIdentifiers",
+			"org.checkerframework.checker.signature.qual.FieldDescriptor",
+			"org.checkerframework.checker.signature.qual.FieldDescriptorForPrimitive",
+			"org.checkerframework.checker.signature.qual.FieldDescriptorForPrimitiveOrArrayInUnnamedPackage",
+			"org.checkerframework.checker.signature.qual.FqBinaryName",
+			"org.checkerframework.checker.signature.qual.FullyQualifiedName",
+			"org.checkerframework.checker.signature.qual.Identifier",
+			"org.checkerframework.checker.signature.qual.IdentifierOrArray",
+			"org.checkerframework.checker.signature.qual.InternalForm",
+			"org.checkerframework.checker.signature.qual.MethodDescriptor",
+			"org.checkerframework.checker.signature.qual.PolySignature",
+			"org.checkerframework.checker.signature.qual.SignatureBottom",
+			"org.checkerframework.checker.signedness.qual.Constant",
+			"org.checkerframework.checker.signedness.qual.PolySignedness",
+			"org.checkerframework.checker.signedness.qual.PolySigned",
+			"org.checkerframework.checker.signedness.qual.Signed",
+			"org.checkerframework.checker.signedness.qual.SignednessBottom",
+			"org.checkerframework.checker.signedness.qual.SignednessGlb",
+			"org.checkerframework.checker.signedness.qual.SignedPositive",
+			"org.checkerframework.checker.signedness.qual.UnknownSignedness",
+			"org.checkerframework.checker.signedness.qual.Unsigned",
+			"org.checkerframework.checker.tainting.qual.PolyTainted",
+			"org.checkerframework.checker.tainting.qual.Tainted",
+			"org.checkerframework.checker.tainting.qual.Untainted",
+			"org.checkerframework.checker.units.qual.A",
+			"org.checkerframework.checker.units.qual.Acceleration",
+			"org.checkerframework.checker.units.qual.Angle",
+			"org.checkerframework.checker.units.qual.Area",
+			"org.checkerframework.checker.units.qual.C",
+			"org.checkerframework.checker.units.qual.cd",
+			"org.checkerframework.checker.units.qual.Current",
+			"org.checkerframework.checker.units.qual.degrees",
+			"org.checkerframework.checker.units.qual.g",
+			"org.checkerframework.checker.units.qual.h",
+			"org.checkerframework.checker.units.qual.K",
+			"org.checkerframework.checker.units.qual.kg",
+			"org.checkerframework.checker.units.qual.km",
+			"org.checkerframework.checker.units.qual.km2",
+			"org.checkerframework.checker.units.qual.kmPERh",
+			"org.checkerframework.checker.units.qual.Length",
+			"org.checkerframework.checker.units.qual.Luminance",
+			"org.checkerframework.checker.units.qual.m",
+			"org.checkerframework.checker.units.qual.m2",
+			"org.checkerframework.checker.units.qual.Mass",
+			"org.checkerframework.checker.units.qual.min",
+			"org.checkerframework.checker.units.qual.mm",
+			"org.checkerframework.checker.units.qual.mm2",
+			"org.checkerframework.checker.units.qual.mol",
+			"org.checkerframework.checker.units.qual.mPERs",
+			"org.checkerframework.checker.units.qual.mPERs2",
+			"org.checkerframework.checker.units.qual.PolyUnit",
+			"org.checkerframework.checker.units.qual.radians",
+			"org.checkerframework.checker.units.qual.s",
+			"org.checkerframework.checker.units.qual.Speed",
+			"org.checkerframework.checker.units.qual.Substance",
+			"org.checkerframework.checker.units.qual.Temperature",
+			"org.checkerframework.checker.units.qual.Time",
+			"org.checkerframework.checker.units.qual.UnitsBottom",
+			"org.checkerframework.checker.units.qual.UnknownUnits",
+			"org.checkerframework.common.aliasing.qual.LeakedToResult",
+			"org.checkerframework.common.aliasing.qual.MaybeAliased",
+			"org.checkerframework.common.aliasing.qual.NonLeaked",
+			"org.checkerframework.common.aliasing.qual.Unique",
+			"org.checkerframework.common.reflection.qual.ClassBound",
+			"org.checkerframework.common.reflection.qual.ClassVal",
+			"org.checkerframework.common.reflection.qual.ClassValBottom",
+			"org.checkerframework.common.reflection.qual.MethodVal",
+			"org.checkerframework.common.reflection.qual.MethodValBottom",
+			"org.checkerframework.common.reflection.qual.UnknownClass",
+			"org.checkerframework.common.reflection.qual.UnknownMethod",
+			"org.checkerframework.common.subtyping.qual.Bottom",
+			"org.checkerframework.common.util.report.qual.ReportUnqualified",
+			"org.checkerframework.common.value.qual.ArrayLen",
+			"org.checkerframework.common.value.qual.ArrayLenRange",
+			"org.checkerframework.common.value.qual.BoolVal",
+			"org.checkerframework.common.value.qual.BottomVal",
+			"org.checkerframework.common.value.qual.DoubleVal",
+			"org.checkerframework.common.value.qual.IntRange",
+			"org.checkerframework.common.value.qual.IntVal",
+			"org.checkerframework.common.value.qual.MinLen",
+			"org.checkerframework.common.value.qual.PolyValue",
+			"org.checkerframework.common.value.qual.StringVal",
+			"org.checkerframework.common.value.qual.UnknownVal",
+			"org.checkerframework.framework.qual.PolyAll",
+			"org.checkerframework.framework.util.PurityUnqualified",
+			
+			"org.eclipse.jdt.annotation.NonNull",
 			"org.eclipse.jdt.annotation.Nullable",
-			"org.springframework.lang.Nullable"
+			"org.jetbrains.annotations.NotNull",
+			"org.jetbrains.annotations.Nullable",
+			"org.springframework.lang.NonNull",
+			"org.springframework.lang.Nullable",
+			"org.netbeans.api.annotations.common.NonNull",
+			"org.netbeans.api.annotations.common.NullAllowed",
+		}));
+		COPY_TO_SETTER_ANNOTATIONS = Collections.unmodifiableList(Arrays.asList(new String[] {
+			"com.fasterxml.jackson.annotation.JacksonInject",
+			"com.fasterxml.jackson.annotation.JsonAlias",
+			"com.fasterxml.jackson.annotation.JsonFormat",
+			"com.fasterxml.jackson.annotation.JsonIgnore",
+			"com.fasterxml.jackson.annotation.JsonIgnoreProperties",
+			"com.fasterxml.jackson.annotation.JsonProperty",
+			"com.fasterxml.jackson.annotation.JsonSetter",
+			"com.fasterxml.jackson.annotation.JsonSubTypes",
+			"com.fasterxml.jackson.annotation.JsonTypeInfo",
+			"com.fasterxml.jackson.annotation.JsonView",
+			"com.fasterxml.jackson.databind.annotation.JsonDeserialize",
+			"com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty",
+		}));
+		COPY_TO_BUILDER_SINGULAR_SETTER_ANNOTATIONS = Collections.unmodifiableList(Arrays.asList(new String[] {
+			"com.fasterxml.jackson.annotation.JsonAnySetter",
+		}));
+		JACKSON_COPY_TO_BUILDER_ANNOTATIONS = Collections.unmodifiableList(Arrays.asList(new String[] {
+			"com.fasterxml.jackson.annotation.JsonAutoDetect",
+			"com.fasterxml.jackson.annotation.JsonFormat",
+			"com.fasterxml.jackson.annotation.JsonIgnoreProperties",
+			"com.fasterxml.jackson.annotation.JsonIgnoreType",
+			"com.fasterxml.jackson.annotation.JsonPropertyOrder",
+			"com.fasterxml.jackson.annotation.JsonRootName",
+			"com.fasterxml.jackson.annotation.JsonSubTypes",
+			"com.fasterxml.jackson.annotation.JsonTypeInfo",
+			"com.fasterxml.jackson.annotation.JsonTypeName",
+			"com.fasterxml.jackson.annotation.JsonView",
+			"com.fasterxml.jackson.databind.annotation.JsonNaming",
 		}));
 	}
 	
@@ -128,6 +367,7 @@ public class HandlerUtil {
 	public static String autoSingularize(String plural) {
 		return Singulars.autoSingularize(plural);
 	}
+	
 	public static void handleFlagUsage(LombokNode<?, ?, ?> node, ConfigurationKey<FlagUsageType> key, String featureName) {
 		FlagUsageType fut = node.getAst().readConfiguration(key);
 		
@@ -176,7 +416,7 @@ public class HandlerUtil {
 		if (fut != null) {
 			String msg = "Use of " + featureName + " is flagged according to lombok configuration.";
 			if (fut == FlagUsageType.WARNING) node.addWarning(msg);
-			else node.addError(msg);
+			else if (fut == FlagUsageType.ERROR) node.addError(msg);
 		}
 	}
 	
@@ -206,7 +446,7 @@ public class HandlerUtil {
 	@SuppressWarnings({"all", "unchecked", "deprecation"})
 	public static final List<String> INVALID_ON_BUILDERS = Collections.unmodifiableList(
 			Arrays.<String>asList(
-			Getter.class.getName(), Setter.class.getName(), Wither.class.getName(),
+			Getter.class.getName(), Setter.class.getName(), With.class.getName(), "lombok.experimental.Wither",
 			ToString.class.getName(), EqualsAndHashCode.class.getName(), 
 			RequiredArgsConstructor.class.getName(), AllArgsConstructor.class.getName(), NoArgsConstructor.class.getName(), 
 			Data.class.getName(), Value.class.getName(), "lombok.experimental.Value", FieldDefaults.class.getName()));
@@ -245,11 +485,6 @@ public class HandlerUtil {
 		
 		return null;
 	}
-	
-	/* NB: 'notnull' is not part of the pattern because there are lots of @NotNull annotations out there that are crappily named and actually mean
-	        something else, such as 'this field must not be null _when saved to the db_ but its perfectly okay to start out as such, and a no-args
-	        constructor and the implied starts-out-as-null state that goes with it is in fact mandatory' which happens with javax.validation.constraints.NotNull.
-	        Various problems with spring have also been reported. See issue #287, issue #271, and issue #43. */
 	
 	public static final String DEFAULT_EXCEPTION_FOR_NON_NULL = "java.lang.NullPointerException";
 	
@@ -302,7 +537,7 @@ public class HandlerUtil {
 	}
 	
 	/**
-	 * Generates a wither name from a given field name.
+	 * Generates a with name from a given field name.
 	 * 
 	 * Strategy:
 	 * <ul>
@@ -318,10 +553,24 @@ public class HandlerUtil {
 	 * @param accessors Accessors configuration.
 	 * @param fieldName the name of the field.
 	 * @param isBoolean if the field is of type 'boolean'. For fields of type {@code java.lang.Boolean}, you should provide {@code false}.
-	 * @return The wither name for this field, or {@code null} if this field does not fit expected patterns and therefore cannot be turned into a getter name.
+	 * @return The with name for this field, or {@code null} if this field does not fit expected patterns and therefore cannot be turned into a getter name.
 	 */
-	public static String toWitherName(AST<?, ?, ?> ast, AnnotationValues<Accessors> accessors, CharSequence fieldName, boolean isBoolean) {
+	public static String toWithName(AST<?, ?, ?> ast, AnnotationValues<Accessors> accessors, CharSequence fieldName, boolean isBoolean) {
 		return toAccessorName(ast, accessors, fieldName, isBoolean, "with", "with", false);
+	}
+	
+	/**
+	 * Generates a withBy name from a given field name.
+	 * 
+	 * Strategy: The same as the {@code toWithName} strategy, but then append {@code "By"} at the end.
+	 * 
+	 * @param accessors Accessors configuration.
+	 * @param fieldName the name of the field.
+	 * @param isBoolean if the field is of type 'boolean'. For fields of type {@code java.lang.Boolean}, you should provide {@code false}.
+	 * @return The with name for this field, or {@code null} if this field does not fit expected patterns and therefore cannot be turned into a getter name.
+	 */
+	public static String toWithByName(AST<?, ?, ?> ast, AnnotationValues<Accessors> accessors, CharSequence fieldName, boolean isBoolean) {
+		return toAccessorName(ast, accessors, fieldName, isBoolean, "with", "with", false) + "By";
 	}
 	
 	private static String toAccessorName(AST<?, ?, ?> ast, AnnotationValues<Accessors> accessors, CharSequence fieldName, boolean isBoolean,
@@ -382,7 +631,7 @@ public class HandlerUtil {
 	}
 	
 	/**
-	 * Returns all names of methods that would represent the wither for a field with the provided name.
+	 * Returns all names of methods that would represent the with for a field with the provided name.
 	 * 
 	 * For example if {@code isBoolean} is true, then a field named {@code isRunning} would produce:<br />
 	 * {@code [withRunning, withIsRunning]}
@@ -391,8 +640,25 @@ public class HandlerUtil {
 	 * @param fieldName the name of the field.
 	 * @param isBoolean if the field is of type 'boolean'. For fields of type 'java.lang.Boolean', you should provide {@code false}.
 	 */
-	public static List<String> toAllWitherNames(AST<?, ?, ?> ast, AnnotationValues<Accessors> accessors, CharSequence fieldName, boolean isBoolean) {
+	public static List<String> toAllWithNames(AST<?, ?, ?> ast, AnnotationValues<Accessors> accessors, CharSequence fieldName, boolean isBoolean) {
 		return toAllAccessorNames(ast, accessors, fieldName, isBoolean, "with", "with", false);
+	}
+	
+	/**
+	 * Returns all names of methods that would represent the withBy for a field with the provided name.
+	 * 
+	 * For example if {@code isBoolean} is true, then a field named {@code isRunning} would produce:<br />
+	 * {@code [withRunningBy, withIsRunningBy]}
+	 * 
+	 * @param accessors Accessors configuration.
+	 * @param fieldName the name of the field.
+	 * @param isBoolean if the field is of type 'boolean'. For fields of type 'java.lang.Boolean', you should provide {@code false}.
+	 */
+	public static List<String> toAllWithByNames(AST<?, ?, ?> ast, AnnotationValues<Accessors> accessors, CharSequence fieldName, boolean isBoolean) {
+		List<String> in = toAllAccessorNames(ast, accessors, fieldName, isBoolean, "with", "with", false);
+		if (!(in instanceof ArrayList)) in = new ArrayList<String>(in);
+		for (int i = 0; i < in.size(); i++) in.set(i, in.get(i) + "By");
+		return in;
 	}
 	
 	private static List<String> toAllAccessorNames(AST<?, ?, ?> ast, AnnotationValues<Accessors> accessors, CharSequence fieldName, boolean isBoolean,
@@ -428,7 +694,6 @@ public class HandlerUtil {
 		}
 		
 		return new ArrayList<String>(names);
-		
 	}
 	
 	private static List<String> toBaseNames(CharSequence fieldName, boolean isBoolean, boolean fluent) {
@@ -479,5 +744,94 @@ public class HandlerUtil {
 			b.append(Character.toUpperCase(c));
 		}
 		return b.toString();
+	}
+	
+	/** Matches any of the 8 primitive wrapper names, such as {@code Boolean}. */
+	private static final Pattern PRIMITIVE_WRAPPER_TYPE_NAME_PATTERN = Pattern.compile("^(?:java\\.lang\\.)?(?:Boolean|Byte|Short|Integer|Long|Float|Double|Character)$");
+
+	public static int defaultEqualsAndHashcodeIncludeRank(String typeName) {
+		// Modification in this code should be documented
+		// 1. In the changelog this should be marked as an INPROBABLE BREAKING CHANGE, since the hashcode will change
+		// 2. In the javadoc of EqualsAndHashcode.Include#rank
+		if (JavaIdentifiers.isPrimitive(typeName)) return 1000;
+		if (PRIMITIVE_WRAPPER_TYPE_NAME_PATTERN.matcher(typeName).matches()) return 800;
+		return 0;
+	}
+	
+	private static final Pattern SECTION_FINDER = Pattern.compile("^\\s*\\**\\s*[-*][-*]+\\s*([GS]ETTER|WITH(?:ER)?)\\s*[-*][-*]+\\s*\\**\\s*$", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+	private static final Pattern LINE_BREAK_FINDER = Pattern.compile("(\\r?\\n)?");
+	
+	public static String stripLinesWithTagFromJavadoc(String javadoc, String regexpFragment) {
+		if (javadoc == null || javadoc.isEmpty()) return javadoc;
+		Pattern p = Pattern.compile("^\\s*\\**\\s*" + regexpFragment + "\\s*\\**\\s*$", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+		Matcher m = p.matcher(javadoc);
+		return m.replaceAll("");
+	}
+	
+	public static String stripSectionsFromJavadoc(String javadoc) {
+		if (javadoc == null || javadoc.isEmpty()) return javadoc;
+		Matcher sectionMatcher = SECTION_FINDER.matcher(javadoc);
+		if (!sectionMatcher.find()) return javadoc;
+		
+		return javadoc.substring(0, sectionMatcher.start());
+	}
+	
+	public static String getJavadocSection(String javadoc, String sectionNameSpec) {
+		if (javadoc == null || javadoc.isEmpty()) return null;
+		String[] sectionNames = sectionNameSpec.split("\\|");
+		Matcher sectionMatcher = SECTION_FINDER.matcher(javadoc);
+		Matcher lineBreakMatcher = LINE_BREAK_FINDER.matcher(javadoc);
+		int sectionStart = -1;
+		int sectionEnd = -1;
+		while (sectionMatcher.find()) {
+			boolean found = false;
+			for (String sectionName : sectionNames) if (sectionMatcher.group(1).equalsIgnoreCase(sectionName)) {
+				found = true;
+				break;
+			}
+			if (found) {
+				lineBreakMatcher.find(sectionMatcher.end());
+				sectionStart = lineBreakMatcher.end();
+			} else if (sectionStart != -1) {
+				sectionEnd = sectionMatcher.start();
+			}
+		}
+		
+		if (sectionStart != -1) {
+			if (sectionEnd != -1) return javadoc.substring(sectionStart, sectionEnd);
+			return javadoc.substring(sectionStart);
+		}
+		
+		return null;
+	}
+	
+	private static final Pattern FIND_RETURN = Pattern.compile("^\\s*\\**\\s*@returns?\\s+.*$", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+	
+	public static String addReturnsThisIfNeeded(String in) {
+		if (in != null && FIND_RETURN.matcher(in).find()) return in;
+		
+		return addJavadocLine(in, "@return {@code this}.");
+	}
+	
+	public static String addReturnsUpdatedSelfIfNeeded(String in) {
+		if (in != null && FIND_RETURN.matcher(in).find()) return in;
+		
+		return addJavadocLine(in, "@return a clone of this object, except with this updated property (returns {@code this} if an identical value is passed).");
+	}
+	
+	public static String addJavadocLine(String in, String line) {
+		if (in == null) return line;
+		if (in.endsWith("\n")) return in + line + "\n";
+		return in + "\n" + line;
+	}
+
+	public static String getParamJavadoc(String methodComment, String param) {
+		if (methodComment == null || methodComment.isEmpty()) return methodComment;
+		Pattern pattern = Pattern.compile("@param " + param + " (\\S|\\s)+?(?=^ ?@)", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+		Matcher matcher = pattern.matcher(methodComment);
+		if (matcher.find()) {
+			return matcher.group();
+		}
+		return null;
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2018 The Project Lombok Authors.
+ * Copyright (C) 2009-2019 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -36,24 +37,30 @@ import javax.lang.model.type.NoType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeVisitor;
 
-import lombok.core.ClassLiteral;
-import lombok.core.FieldSelect;
-import lombok.javac.JavacTreeMaker.TreeTag;
-import lombok.javac.JavacTreeMaker.TypeTag;
-import lombok.permit.Permit;
-
+import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Source;
 import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.main.JavaCompiler;
+import com.sun.tools.javac.parser.Tokens.Comment;
+import com.sun.tools.javac.tree.DocCommentTable;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.tree.JCTree.JCExpression;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
 import com.sun.tools.javac.tree.JCTree.JCLiteral;
+import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.util.JCDiagnostic.DiagnosticPosition;
+
+import lombok.core.ClassLiteral;
+import lombok.core.FieldSelect;
+import lombok.core.JavaIdentifiers;
+import lombok.javac.JavacTreeMaker.TreeTag;
+import lombok.javac.JavacTreeMaker.TypeTag;
+import lombok.permit.Permit;
 
 /**
  * Container for static utility methods relevant to lombok's operation on javac.
@@ -62,9 +69,6 @@ public class Javac {
 	private Javac() {
 		// prevent instantiation
 	}
-	
-	/** Matches any of the 8 primitive names, such as {@code boolean}. */
-	private static final Pattern PRIMITIVE_TYPE_NAME_PATTERN = Pattern.compile("^(boolean|byte|short|int|long|float|double|char)$");
 	
 	private static final Pattern VERSION_PARSER = Pattern.compile("^(\\d{1,6})\\.?(\\d{1,6})?.*$");
 	private static final Pattern SOURCE_PARSER = Pattern.compile("^JDK(\\d{1,6})_?(\\d{1,6})?.*$");
@@ -129,8 +133,7 @@ public class Javac {
 	 * expression) represents a primitive type.
 	 */
 	public static boolean isPrimitive(JCExpression ref) {
-		String typeName = ref.toString();
-		return PRIMITIVE_TYPE_NAME_PATTERN.matcher(typeName).matches();
+		return JavaIdentifiers.isPrimitive(ref.toString());
 	}
 	
 	/**
@@ -269,6 +272,74 @@ public class Javac {
 		}
 	}
 	
+	public static String getDocComment(JCCompilationUnit cu, JCTree node) {
+		Object dc = getDocComments(cu);
+		if (dc instanceof Map) return (String) ((Map<?, ?>) dc).get(node);
+		if (instanceOfDocCommentTable(dc)) return JavadocOps_8.getJavadoc(dc, node);
+		return null;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public static void setDocComment(JCCompilationUnit cu, JCTree node, String javadoc) {
+		if (javadoc == null) return;
+		Object dc = getDocComments(cu);
+		if (dc instanceof Map) {
+			((Map<JCTree, String>) dc).put(node, javadoc);
+			return;
+		}
+		
+		if (instanceOfDocCommentTable(dc)) {
+			JavadocOps_8.setJavadoc(dc, node, javadoc);
+			return;
+		}
+	}
+	
+	private static class JavadocOps_8 {
+		static String getJavadoc(Object dc, JCTree node) {
+			DocCommentTable dct = (DocCommentTable) dc;
+			Comment javadoc = dct.getComment(node);
+			if (javadoc == null) return null;
+			return javadoc.getText();
+		}
+		
+		static void setJavadoc(Object dc, JCTree node, String javadoc) {
+			DocCommentTable dct = (DocCommentTable) dc;
+			Comment newCmt = createJavadocComment(javadoc, node);
+			dct.putComment(node, newCmt);
+		}
+		
+		private static Comment createJavadocComment(final String text, final JCTree field) {
+			return new Comment() {
+				@Override public String getText() {
+					return text;
+				}
+				
+				@Override public int getSourcePos(int index) {
+					return -1;
+				}
+				
+				@Override public CommentStyle getStyle() {
+					return CommentStyle.JAVADOC;
+				}
+				
+				@Override public boolean isDeprecated() {
+					return text.contains("@deprecated") && field instanceof JCVariableDecl && isFieldDeprecated(field);
+				}
+			};
+		}
+	}
+	
+	public static boolean isFieldDeprecated(JCTree field) {
+		if (!(field instanceof JCVariableDecl)) return false;
+		JCVariableDecl fieldNode = (JCVariableDecl) field;
+		if ((fieldNode.mods.flags & Flags.DEPRECATED) != 0) return true;
+		if (fieldNode.mods.annotations != null) for (JCAnnotation ann : fieldNode.mods.annotations) {
+			String at = ann.getAnnotationType().toString();
+			return at.equals("Deprecated") || at.endsWith(".Deprecated");
+		}
+		return false;
+	}
+	
 	public static void initDocComments(JCCompilationUnit cu) {
 		try {
 			JCCOMPILATIONUNIT_DOCCOMMENTS.set(cu, new HashMap<Object, String>());
@@ -336,10 +407,14 @@ public class Javac {
 		} else {
 			try {
 				if (CTC_VOID.equals(tag)) {
-					return (Type) JC_VOID_TYPE.newInstance();
+					return (Type) JC_VOID_TYPE.getConstructor().newInstance();
 				} else {
-					return (Type) JC_NO_TYPE.newInstance();
+					return (Type) JC_NO_TYPE.getConstructor().newInstance();
 				}
+			} catch (InvocationTargetException e) {
+				throw sneakyThrow(e.getCause());
+			} catch (NoSuchMethodException e) {
+				throw sneakyThrow(e);
 			} catch (IllegalAccessException e) {
 				throw sneakyThrow(e);
 			} catch (InstantiationException e) {

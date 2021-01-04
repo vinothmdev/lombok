@@ -9,12 +9,15 @@ public @Builder class BuilderWithTolerate {
     @java.lang.SuppressWarnings("all") BuilderWithTolerateBuilder() {
       super();
     }
-    public @java.lang.SuppressWarnings("all") BuilderWithTolerateBuilder value(final int value) {
+    /**
+     * @return {@code this}.
+     */
+    public @java.lang.SuppressWarnings("all") BuilderWithTolerate.BuilderWithTolerateBuilder value(final int value) {
       this.value = value;
       return this;
     }
     public @java.lang.SuppressWarnings("all") BuilderWithTolerate build() {
-      return new BuilderWithTolerate(value);
+      return new BuilderWithTolerate(this.value);
     }
     public @java.lang.Override @java.lang.SuppressWarnings("all") java.lang.String toString() {
       return (("BuilderWithTolerate.BuilderWithTolerateBuilder(value=" + this.value) + ")");
@@ -28,7 +31,7 @@ public @Builder class BuilderWithTolerate {
     super();
     this.value = value;
   }
-  public static @java.lang.SuppressWarnings("all") BuilderWithTolerateBuilder builder() {
-    return new BuilderWithTolerateBuilder();
+  public static @java.lang.SuppressWarnings("all") BuilderWithTolerate.BuilderWithTolerateBuilder builder() {
+    return new BuilderWithTolerate.BuilderWithTolerateBuilder();
   }
 }

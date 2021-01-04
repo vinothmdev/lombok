@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 The Project Lombok Authors.
+ * Copyright (C) 2015-2019 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -32,20 +32,12 @@ import com.sun.tools.javac.util.List;
 import com.sun.tools.javac.util.ListBuffer;
 import com.sun.tools.javac.util.Name;
 
-import lombok.ConfigurationKeys;
 import lombok.javac.JavacNode;
 import lombok.javac.JavacTreeMaker;
 import lombok.javac.handlers.JavacSingularsRecipes.JavacSingularizer;
 import lombok.javac.handlers.JavacSingularsRecipes.SingularData;
 
 abstract class JavacJavaUtilSingularizer extends JavacSingularizer {
-	protected final JavacSingularizer guavaListSetSingularizer = new JavacGuavaSetListSingularizer();
-	protected final JavacSingularizer guavaMapSingularizer = new JavacGuavaMapSingularizer();
-	
-	protected boolean useGuavaInstead(JavacNode node) {
-		return Boolean.TRUE.equals(node.getAst().readConfiguration(ConfigurationKeys.SINGULAR_USE_GUAVA));
-	}
-	
 	protected List<JCStatement> createJavaUtilSetMapInitialCapacitySwitchStatements(JavacTreeMaker maker, SingularData data, JavacNode builderType, boolean mapMode, String emptyCollectionMethod, String singletonCollectionMethod, String targetType, JCTree source, String builderVariable) {
 		List<JCExpression> jceBlank = List.nil();
 		ListBuffer<JCCase> cases = new ListBuffer<JCCase>();
@@ -92,7 +84,7 @@ abstract class JavacJavaUtilSingularizer extends JavacSingularizer {
 		JCStatement switchStat = maker.Switch(getSize(maker,  builderType, mapMode ? builderType.toName(data.getPluralName() + "$key") : data.getPluralName(), true, false, builderVariable), cases.toList());
 		JCExpression localShadowerType = chainDotsString(builderType, data.getTargetFqn());
 		localShadowerType = addTypeArgs(mapMode ? 2 : 1, false, builderType, localShadowerType, data.getTypeArgs(), source);
-		JCStatement varDefStat = maker.VarDef(maker.Modifiers(0), data.getPluralName(), localShadowerType, null);
+		JCStatement varDefStat = maker.VarDef(maker.Modifiers(0L), data.getPluralName(), localShadowerType, null);
 		return List.of(varDefStat, switchStat);
 	}
 	
@@ -151,7 +143,7 @@ abstract class JavacJavaUtilSingularizer extends JavacSingularizer {
 			if (defineVar) {
 				JCExpression localShadowerType = chainDotsString(builderType, data.getTargetFqn());
 				localShadowerType = addTypeArgs(mapMode ? 2 : 1, false, builderType, localShadowerType, data.getTypeArgs(), source);
-				createStat = maker.VarDef(maker.Modifiers(0), data.getPluralName(), localShadowerType, constructorCall);
+				createStat = maker.VarDef(maker.Modifiers(0L), data.getPluralName(), localShadowerType, constructorCall);
 			} else {
 				createStat = maker.Exec(maker.Assign(maker.Ident(data.getPluralName()), constructorCall));
 			}
@@ -169,7 +161,7 @@ abstract class JavacJavaUtilSingularizer extends JavacSingularizer {
 				//   error: method put in interface Map<K#2,V#2> cannot be applied to given types;
 				arg2 = maker.TypeCast(createTypeArgs(2, false, builderType, data.getTypeArgs(), source).get(1), arg2);
 				JCStatement putStatement = maker.Exec(maker.Apply(jceBlank, pluralnameDotPut, List.of(arg1, arg2)));
-				JCStatement forInit = maker.VarDef(maker.Modifiers(0), ivar, maker.TypeIdent(CTC_INT), maker.Literal(CTC_INT, 0));
+				JCStatement forInit = maker.VarDef(maker.Modifiers(0L), ivar, maker.TypeIdent(CTC_INT), maker.Literal(CTC_INT, 0));
 				JCExpression checkExpr = maker.Binary(CTC_LESS_THAN, maker.Ident(ivar), getSize(maker, builderType, keyVarName, nullGuard, true, builderVariable));
 				JCExpression incrementExpr = maker.Unary(CTC_POSTINC, maker.Ident(ivar));
 				fillStat = maker.ForLoop(List.of(forInit), checkExpr, List.of(maker.Exec(incrementExpr)), putStatement);

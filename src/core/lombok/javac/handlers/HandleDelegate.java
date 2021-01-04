@@ -21,11 +21,12 @@
  */
 package lombok.javac.handlers;
 
-import static lombok.core.handlers.HandlerUtil.*;
-import static lombok.javac.handlers.JavacHandlerUtil.*;
 import static com.sun.tools.javac.code.Flags.*;
+import static lombok.core.handlers.HandlerUtil.handleExperimentalFlagUsage;
+import static lombok.javac.handlers.JavacHandlerUtil.*;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -42,24 +43,12 @@ import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
-import lombok.ConfigurationKeys;
-import lombok.experimental.Delegate;
-import lombok.core.AST.Kind;
-import lombok.core.AnnotationValues;
-import lombok.core.HandlerPriority;
-import lombok.javac.FindTypeVarScanner;
-import lombok.javac.JavacAnnotationHandler;
-import lombok.javac.JavacNode;
-import lombok.javac.JavacResolution;
-import lombok.javac.JavacTreeMaker;
-import lombok.javac.ResolutionResetNeeded;
-import lombok.javac.JavacResolution.TypeNotConvertibleException;
-
 import org.mangosdk.spi.ProviderFor;
 
 import com.sun.tools.javac.code.Attribute.Compound;
 import com.sun.tools.javac.code.Flags;
 import com.sun.tools.javac.code.Symbol;
+import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Symbol.TypeSymbol;
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.code.Type.ClassType;
@@ -80,10 +69,25 @@ import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.util.ListBuffer;
 import com.sun.tools.javac.util.Name;
 
+import lombok.ConfigurationKeys;
+import lombok.core.AST.Kind;
+import lombok.core.AnnotationValues;
+import lombok.core.HandlerPriority;
+import lombok.experimental.Delegate;
+import lombok.javac.FindTypeVarScanner;
+import lombok.javac.JavacAnnotationHandler;
+import lombok.javac.JavacNode;
+import lombok.javac.JavacResolution;
+import lombok.javac.JavacResolution.TypeNotConvertibleException;
+import lombok.javac.JavacTreeMaker;
+import lombok.javac.ResolutionResetNeeded;
+import lombok.permit.Permit;
+
 @ProviderFor(JavacAnnotationHandler.class)
-@HandlerPriority(65536) //2^16; to make sure that we also delegate generated methods.
+@HandlerPriority(HandleDelegate.HANDLE_DELEGATE_PRIORITY) //2^16; to make sure that we also delegate generated methods.
 @ResolutionResetNeeded
 public class HandleDelegate extends JavacAnnotationHandler<Delegate> {
+	
 	private static final List<String> METHODS_IN_OBJECT = Collections.unmodifiableList(Arrays.asList(
 			"hashCode()",
 			"canEqual(java.lang.Object)",  //Not in j.l.Object, but it goes with hashCode and equals so if we ignore those two, we should ignore this one.
@@ -100,6 +104,7 @@ public class HandleDelegate extends JavacAnnotationHandler<Delegate> {
 	
 	private static final String LEGALITY_OF_DELEGATE = "@Delegate is legal only on instance fields or no-argument instance methods.";
 	private static final String RECURSION_NOT_ALLOWED = "@Delegate does not support recursion (delegating to a type that itself has @Delegate members). Member \"%s\" is @Delegate in type \"%s\"";
+	public static final int HANDLE_DELEGATE_PRIORITY = 65536;
 
 	
 	@Override public void handle(AnnotationValues<Delegate> annotation, JCAnnotation ast, JavacNode annotationNode) {
@@ -172,14 +177,14 @@ public class HandleDelegate extends JavacAnnotationHandler<Delegate> {
 		List<MethodSig> signaturesToExclude = new ArrayList<MethodSig>();
 		Set<String> banList = new HashSet<String>();
 		banList.addAll(METHODS_IN_OBJECT);
-		/* To exclude all methods in the class itself, try this:
-		for (Symbol member : ((JCClassDecl)typeNode.get()).sym.getEnclosedElements()) {
-			if (member instanceof MethodSymbol) {
-				MethodSymbol method = (MethodSymbol) member;
-				banList.add(printSig((ExecutableType) method.asType(), method.name, annotationNode.getTypesUtil()));
+		
+		// Add already implemented methods to ban list
+		JavacNode typeNode = upToTypeNode(annotationNode);
+		for (Symbol m : ((JCClassDecl)typeNode.get()).sym.getEnclosedElements()) {
+			if (m instanceof MethodSymbol) {
+				banList.add(printSig((ExecutableType) m.asType(), m.name, annotationNode.getTypesUtil()));
 			}
 		}
-		 */
 		
 		try {
 			for (Type t : toExclude) {
@@ -197,8 +202,9 @@ public class HandleDelegate extends JavacAnnotationHandler<Delegate> {
 			}
 			
 			for (Type t : toDelegate) {
-				if (t instanceof ClassType) {
-					ClassType ct = (ClassType) t;
+				Type unannotatedType = Unannotated.unannotatedType(t);
+				if (unannotatedType instanceof ClassType) {
+					ClassType ct = (ClassType) unannotatedType;
 					addMethodBindings(signaturesToDelegate, ct, annotationNode.getTypesUtil(), banList);
 				} else {
 					annotationNode.addError("@Delegate can only use concrete class types, not wildcards, arrays, type variables, or primitives.");
@@ -385,10 +391,11 @@ public class HandleDelegate extends JavacAnnotationHandler<Delegate> {
 			boolean isDeprecated = (member.flags() & DEPRECATED) != 0;
 			signatures.add(new MethodSig(member.name, methodType, isDeprecated, exElem));
 		}
-		
-		if (ct.supertype_field instanceof ClassType) addMethodBindings(signatures, (ClassType) ct.supertype_field, types, banList);
-		if (ct.interfaces_field != null) for (Type iface : ct.interfaces_field) {
-			if (iface instanceof ClassType) addMethodBindings(signatures, (ClassType) iface, types, banList);
+
+		for (Type type : types.directSupertypes(ct)) {
+			if (type instanceof ClassType) {
+				addMethodBindings(signatures, (ClassType) type, types, banList);
+			}
 		}
 	}
 	
@@ -452,5 +459,26 @@ public class HandleDelegate extends JavacAnnotationHandler<Delegate> {
 		};
 		
 		public abstract JCExpression get(final JavacNode node, final Name name);
+	}
+	
+	private static class Unannotated {
+		private static final Method unannotated;
+		
+		static {
+			Method m = null;
+			try {
+				m = Permit.getMethod(Type.class, "unannotatedType");
+			} catch (Exception e) {/* ignore */}
+			unannotated = m;
+		}
+		
+		static Type unannotatedType(Type t) {
+			if (unannotated == null) return t;
+			try {
+				return (Type) Permit.invoke(unannotated, t);
+			} catch (Exception e) {
+				return t;
+			}
+		}
 	}
 }

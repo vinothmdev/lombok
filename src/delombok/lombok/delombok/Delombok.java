@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2018 The Project Lombok Authors.
+ * Copyright (C) 2009-2019 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -34,7 +34,6 @@ import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -93,6 +92,7 @@ public class Delombok {
 	private boolean noCopy;
 	private boolean onlyChanged;
 	private boolean force = false;
+	private boolean disablePreview;
 	private String classpath, sourcepath, bootclasspath, modulepath;
 	private LinkedHashMap<File, File> fileToBase = new LinkedHashMap<File, File>();
 	private List<File> filesToParse = new ArrayList<File>();
@@ -157,6 +157,10 @@ public class Delombok {
 		
 		@Description("Output only changed files (implies -n)")
 		private boolean onlyChanged;
+		
+		@Description("By default lombok enables preview features if available (introduced in JDK 12). With this option, lombok won't do that.")
+		@FullName("disable-preview")
+		private boolean disablePreview;
 		
 		private boolean help;
 	}
@@ -281,6 +285,7 @@ public class Delombok {
 		
 		if (args.verbose) delombok.setVerbose(true);
 		if (args.nocopy || args.onlyChanged) delombok.setNoCopy(true);
+		if (args.disablePreview) delombok.setDisablePreview(true);
 		if (args.onlyChanged) delombok.setOnlyChanged(true);
 		if (args.print) {
 			delombok.setOutputToStandardOut();
@@ -348,11 +353,15 @@ public class Delombok {
 		StringBuilder s = new StringBuilder();
 		try {
 			InputStreamReader isr = new InputStreamReader(in, "UTF-8");
-			char[] c = new char[4096];
-			while (true) {
-				int r = isr.read(c);
-				if (r == -1) break;
-				s.append(c, 0, r);
+			try {
+				char[] c = new char[4096];
+				while (true) {
+					int r = isr.read(c);
+					if (r == -1) break;
+					s.append(c, 0, r);
+				}
+			} finally {
+				isr.close();
 			}
 		} finally {
 			in.close();
@@ -426,7 +435,7 @@ public class Delombok {
 			throw new IOException("Unclosed ' in @ file");
 		}
 		
-		return x.toArray(new String[x.size()]);
+		return x.toArray(new String[0]);
 	}
 	
 	public static class InvalidFormatOptionException extends Exception {
@@ -514,6 +523,10 @@ public class Delombok {
 	
 	public void setNoCopy(boolean noCopy) {
 		this.noCopy = noCopy;
+	}
+	
+	public void setDisablePreview(boolean disablePreview) {
+		this.disablePreview = disablePreview;
 	}
 	
 	public void setOnlyChanged(boolean onlyChanged) {
@@ -684,14 +697,22 @@ public class Delombok {
 				argsList.add("--module-path");
 				argsList.add(modulepath);
 			}
-			String[] argv = argsList.toArray(new String[0]);
-			args.init("javac", argv);
+			
+			if (!disablePreview && Javac.getJavaCompilerVersion() >= 11) argsList.add("--enable-preview");
+			
+			if (Javac.getJavaCompilerVersion() < 15) {
+				String[] argv = argsList.toArray(new String[0]);
+				args.init("javac", argv);
+			} else {
+				args.init("javac", argsList);
+			}
 			options.put("diags.legacy", "TRUE");
+			options.put("allowStringFolding", "FALSE");
 		} else {
 			if (modulepath != null && !modulepath.isEmpty()) throw new IllegalStateException("DELOMBOK: Option --module-path requires usage of JDK9 or higher.");
 		}
 		
-		CommentCatcher catcher = CommentCatcher.create(context);
+		CommentCatcher catcher = CommentCatcher.create(context, Javac.getJavaCompilerVersion() >= 13);
 		JavaCompiler compiler = catcher.getCompiler();
 		
 		List<JCCompilationUnit> roots = new ArrayList<JCCompilationUnit>();
@@ -753,9 +774,10 @@ public class Delombok {
 		Object care = callAttributeMethodOnJavaCompiler(delegate, delegate.todo);
 		
 		callFlowMethodOnJavaCompiler(delegate, care);
+		
 		FormatPreferences fps = new FormatPreferences(formatPrefs);
 		for (JCCompilationUnit unit : roots) {
-			DelombokResult result = new DelombokResult(catcher.getComments(unit), unit, force || options.isChanged(unit), fps);
+			DelombokResult result = new DelombokResult(catcher.getComments(unit), catcher.getTextBlockStarts(unit), unit, force || options.isChanged(unit), fps);
 			if (onlyChanged && !result.isChanged() && !options.isChanged(unit)) {
 				if (verbose) feedback.printf("File: %s [%s]\n", unit.sourcefile.getName(), "unchanged (skipped)");
 				continue;
@@ -818,12 +840,8 @@ public class Delombok {
 				}
 			}
 		}
-		try {
-			return attributeMethod.invoke(compiler, arg);
-		} catch (Exception e) {
-			if (e instanceof InvocationTargetException) throw Lombok.sneakyThrow(e.getCause());
-			throw Lombok.sneakyThrow(e);
-		}
+		
+		return Permit.invokeSneaky(attributeMethod, compiler, arg);
 	}
 	
 	private static Method flowMethod;
@@ -840,12 +858,8 @@ public class Delombok {
 				}
 			}
 		}
-		try {
-			flowMethod.invoke(compiler, arg);
-		} catch (Exception e) {
-			if (e instanceof InvocationTargetException) throw Lombok.sneakyThrow(e.getCause());
-			throw Lombok.sneakyThrow(e);
-		}
+		
+		Permit.invokeSneaky(flowMethod, compiler, arg);
 	}
 	
 	private static String canonical(File dir) {

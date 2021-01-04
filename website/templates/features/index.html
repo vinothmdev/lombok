@@ -1,6 +1,7 @@
 <#import "../_scaffold.html" as main>
 
 <@main.scaffold title="Stable">
+	<a class="tidelift-link" href="/tidelift">Get Lombok for Enterprise</a>
 	<div class="page-header top5">
 		<div class="row text-center">
 			<@main.h1 title="Lombok features" />
@@ -63,6 +64,10 @@
 
 			<@main.feature title="@Synchronized" href="Synchronized">
 				<code>synchronized</code> done right: Don't expose your locks.
+			</@main.feature>
+
+			<@main.feature title="@With" href="With">
+				Immutable 'setters' - methods that create a clone but with one changed field.
 			</@main.feature>
 
 			<@main.feature title="@Getter(lazy=true)" href="GetterLazy">

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2018 The Project Lombok Authors.
+ * Copyright (C) 2009-2020 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -71,6 +71,14 @@ public @interface EqualsAndHashCode {
 	 * @return If {@code true}, always use direct field access instead of calling the getter method.
 	 */
 	boolean doNotUseGetters() default false;
+
+	/**
+	 * Determines how the result of the {@code hashCode} method will be cached.
+	 * <strong>default: {@link CacheStrategy#NEVER}</strong>
+	 *
+	 * @return The {@code hashCode} cache strategy to be used.
+	 */
+	CacheStrategy cacheStrategy() default CacheStrategy.NEVER;
 	
 	/**
 	 * Any annotations listed here are put on the generated parameter of {@code equals} and {@code canEqual}.
@@ -97,6 +105,8 @@ public @interface EqualsAndHashCode {
 	/**
 	 * Only include fields and methods explicitly marked with {@code @EqualsAndHashCode.Include}.
 	 * Normally, all (non-static, non-transient) fields are included by default.
+	 * 
+	 * @return If {@code true}, don't include non-static non-transient fields automatically (default: {@code false}).
 	 */
 	boolean onlyExplicitlyIncluded() default false;
 	
@@ -113,7 +123,36 @@ public @interface EqualsAndHashCode {
 	@Target({ElementType.FIELD, ElementType.METHOD})
 	@Retention(RetentionPolicy.SOURCE)
 	public @interface Include {
-		/** Defaults to the method name of the annotated member. If on a method and the name equals the name of a default-included field, this member takes its place. */
+		/**
+		 * Defaults to the method name of the annotated member.
+		 * If on a method and the name equals the name of a default-included field, this member takes its place.
+		 * 
+		 * @return If present, this method serves as replacement for the named field.
+		 */
 		String replaces() default "";
+
+		/**
+		 * Higher ranks are considered first. Members of the same rank are considered in the order they appear in the source file.
+		 * 
+		 * If not explicitly set, the {@code default} rank for primitives is 1000, and for primitive wrappers 800.
+		 * 
+		 * @return ordering within the generating {@code equals} and {@code hashCode} methods; higher numbers are considered first.
+		 */
+		int rank() default 0;
+	}
+
+	public enum CacheStrategy {
+		/**
+		 * Never cache. Perform the calculation every time the method is called.
+		 */
+		NEVER,
+		/**
+		 * Cache the result of the first invocation of {@code hashCode} and use it for subsequent invocations.
+		 * This can improve performance if all fields used for calculating the {@code hashCode} are immutable
+		 * and thus every invocation of {@code hashCode} will always return the same value.
+		 * <strong>Do not use this if there's <em>any</em> chance that different invocations of {@code hashCode}
+		 * might return different values.</strong>
+		 */
+		LAZY
 	}
 }

@@ -1,5 +1,5 @@
 @lombok.experimental.SuperBuilder class SuperBuilderWithPrefixes {
-  public static abstract @java.lang.SuppressWarnings("all") class SuperBuilderWithPrefixesBuilder<C extends SuperBuilderWithPrefixes, B extends SuperBuilderWithPrefixesBuilder<C, B>> {
+  public static abstract @java.lang.SuppressWarnings("all") class SuperBuilderWithPrefixesBuilder<C extends SuperBuilderWithPrefixes, B extends SuperBuilderWithPrefixes.SuperBuilderWithPrefixesBuilder<C, B>> {
     private @java.lang.SuppressWarnings("all") int field;
     private @java.lang.SuppressWarnings("all") int otherField;
     private @java.lang.SuppressWarnings("all") java.util.ArrayList<String> items;
@@ -8,10 +8,16 @@
     }
     protected abstract @java.lang.SuppressWarnings("all") B self();
     public abstract @java.lang.SuppressWarnings("all") C build();
+    /**
+     * @return {@code this}.
+     */
     public @java.lang.SuppressWarnings("all") B field(final int field) {
       this.field = field;
       return self();
     }
+    /**
+     * @return {@code this}.
+     */
     public @java.lang.SuppressWarnings("all") B otherField(final int otherField) {
       this.otherField = otherField;
       return self();
@@ -23,6 +29,10 @@
       return self();
     }
     public @java.lang.SuppressWarnings("all") B items(final java.util.Collection<? extends String> items) {
+      if ((items == null))
+          {
+            throw new java.lang.NullPointerException("items cannot be null");
+          }
       if ((this.items == null))
           this.items = new java.util.ArrayList<String>();
       this.items.addAll(items);
@@ -37,11 +47,11 @@
       return (((((("SuperBuilderWithPrefixes.SuperBuilderWithPrefixesBuilder(field=" + this.field) + ", otherField=") + this.otherField) + ", items=") + this.items) + ")");
     }
   }
-  private static final @java.lang.SuppressWarnings("all") class SuperBuilderWithPrefixesBuilderImpl extends SuperBuilderWithPrefixesBuilder<SuperBuilderWithPrefixes, SuperBuilderWithPrefixesBuilderImpl> {
+  private static final @java.lang.SuppressWarnings("all") class SuperBuilderWithPrefixesBuilderImpl extends SuperBuilderWithPrefixes.SuperBuilderWithPrefixesBuilder<SuperBuilderWithPrefixes, SuperBuilderWithPrefixes.SuperBuilderWithPrefixesBuilderImpl> {
     private SuperBuilderWithPrefixesBuilderImpl() {
       super();
     }
-    protected @java.lang.Override @java.lang.SuppressWarnings("all") SuperBuilderWithPrefixesBuilderImpl self() {
+    protected @java.lang.Override @java.lang.SuppressWarnings("all") SuperBuilderWithPrefixes.SuperBuilderWithPrefixesBuilderImpl self() {
       return this;
     }
     public @java.lang.Override @java.lang.SuppressWarnings("all") SuperBuilderWithPrefixes build() {
@@ -51,7 +61,7 @@
   int mField;
   int xOtherField;
   @lombok.Singular java.util.List<String> mItems;
-  protected @java.lang.SuppressWarnings("all") SuperBuilderWithPrefixes(final SuperBuilderWithPrefixesBuilder<?, ?> b) {
+  protected @java.lang.SuppressWarnings("all") SuperBuilderWithPrefixes(final SuperBuilderWithPrefixes.SuperBuilderWithPrefixesBuilder<?, ?> b) {
     super();
     this.mField = b.field;
     this.xOtherField = b.otherField;
@@ -68,7 +78,7 @@
     }
     this.mItems = items;
   }
-  public static @java.lang.SuppressWarnings("all") SuperBuilderWithPrefixesBuilder<?, ?> builder() {
-    return new SuperBuilderWithPrefixesBuilderImpl();
+  public static @java.lang.SuppressWarnings("all") SuperBuilderWithPrefixes.SuperBuilderWithPrefixesBuilder<?, ?> builder() {
+    return new SuperBuilderWithPrefixes.SuperBuilderWithPrefixesBuilderImpl();
   }
 }

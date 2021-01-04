@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2018 The Project Lombok Authors.
+ * Copyright (C) 2010-2020 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -39,6 +39,7 @@ import lombok.ConfigurationKeys;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.core.AST.Kind;
+import lombok.core.configuration.CheckerFrameworkVersion;
 import lombok.core.AnnotationValues;
 import lombok.eclipse.EclipseAnnotationHandler;
 import lombok.eclipse.EclipseNode;
@@ -83,13 +84,14 @@ import org.mangosdk.spi.ProviderFor;
 public class HandleConstructor {
 	@ProviderFor(EclipseAnnotationHandler.class)
 	public static class HandleNoArgsConstructor extends EclipseAnnotationHandler<NoArgsConstructor> {
+		private static final String NAME = NoArgsConstructor.class.getSimpleName();
 		private HandleConstructor handleConstructor = new HandleConstructor();
 		
 		@Override public void handle(AnnotationValues<NoArgsConstructor> annotation, Annotation ast, EclipseNode annotationNode) {
 			handleFlagUsage(annotationNode, ConfigurationKeys.NO_ARGS_CONSTRUCTOR_FLAG_USAGE, "@NoArgsConstructor", ConfigurationKeys.ANY_CONSTRUCTOR_FLAG_USAGE, "any @xArgsConstructor");
 			
 			EclipseNode typeNode = annotationNode.up();
-			if (!checkLegality(typeNode, annotationNode, NoArgsConstructor.class.getSimpleName())) return;
+			if (!checkLegality(typeNode, annotationNode, NAME)) return;
 			NoArgsConstructor ann = annotation.getInstance();
 			AccessLevel level = ann.access();
 			String staticName = ann.staticName();
@@ -105,13 +107,14 @@ public class HandleConstructor {
 	
 	@ProviderFor(EclipseAnnotationHandler.class)
 	public static class HandleRequiredArgsConstructor extends EclipseAnnotationHandler<RequiredArgsConstructor> {
+		private static final String NAME = RequiredArgsConstructor.class.getSimpleName();
 		private HandleConstructor handleConstructor = new HandleConstructor();
 		
 		@Override public void handle(AnnotationValues<RequiredArgsConstructor> annotation, Annotation ast, EclipseNode annotationNode) {
 			handleFlagUsage(annotationNode, ConfigurationKeys.REQUIRED_ARGS_CONSTRUCTOR_FLAG_USAGE, "@RequiredArgsConstructor", ConfigurationKeys.ANY_CONSTRUCTOR_FLAG_USAGE, "any @xArgsConstructor");
 			
 			EclipseNode typeNode = annotationNode.up();
-			if (!checkLegality(typeNode, annotationNode, RequiredArgsConstructor.class.getSimpleName())) return;
+			if (!checkLegality(typeNode, annotationNode, NAME)) return;
 			RequiredArgsConstructor ann = annotation.getInstance();
 			AccessLevel level = ann.access();
 			if (level == AccessLevel.NONE) return;
@@ -165,13 +168,15 @@ public class HandleConstructor {
 	
 	@ProviderFor(EclipseAnnotationHandler.class)
 	public static class HandleAllArgsConstructor extends EclipseAnnotationHandler<AllArgsConstructor> {
+		private static final String NAME = AllArgsConstructor.class.getSimpleName();
+
 		private HandleConstructor handleConstructor = new HandleConstructor();
 		
 		@Override public void handle(AnnotationValues<AllArgsConstructor> annotation, Annotation ast, EclipseNode annotationNode) {
 			handleFlagUsage(annotationNode, ConfigurationKeys.ALL_ARGS_CONSTRUCTOR_FLAG_USAGE, "@AllArgsConstructor", ConfigurationKeys.ANY_CONSTRUCTOR_FLAG_USAGE, "any @xArgsConstructor");
 			
 			EclipseNode typeNode = annotationNode.up();
-			if (!checkLegality(typeNode, annotationNode, AllArgsConstructor.class.getSimpleName())) return;
+			if (!checkLegality(typeNode, annotationNode, NAME)) return;
 			AllArgsConstructor ann = annotation.getInstance();
 			AccessLevel level = ann.access();
 			if (level == AccessLevel.NONE) return;
@@ -242,8 +247,7 @@ public class HandleConstructor {
 			
 		ASTNode source = sourceNode.get();
 		boolean staticConstrRequired = staticName != null && !staticName.equals("");
-		
-		if (skipIfConstructorExists != SkipIfConstructorExists.NO && constructorExists(typeNode) != MemberExistsResult.NOT_EXISTS) return;
+
 		if (skipIfConstructorExists != SkipIfConstructorExists.NO) {
 			for (EclipseNode child : typeNode.down()) {
 				if (child.getKind() == Kind.ANNOTATION) {
@@ -273,12 +277,18 @@ public class HandleConstructor {
 		
 		if (noArgs && noArgsConstructorExists(typeNode)) return;
 		
-		ConstructorDeclaration constr = createConstructor(
-			staticConstrRequired ? AccessLevel.PRIVATE : level, typeNode, fieldsToParam, forceDefaults,
-			sourceNode, onConstructor);
-		injectMethod(typeNode, constr);
+		if (!(skipIfConstructorExists != SkipIfConstructorExists.NO && constructorExists(typeNode) != MemberExistsResult.NOT_EXISTS)) {
+			ConstructorDeclaration constr = createConstructor(
+				staticConstrRequired ? AccessLevel.PRIVATE : level, typeNode, fieldsToParam, forceDefaults,
+				sourceNode, onConstructor);
+			injectMethod(typeNode, constr);
+		}
+		generateStaticConstructor(staticConstrRequired, typeNode, staticName, level, fieldsToParam, source);
+	}
+	
+	private void generateStaticConstructor(boolean staticConstrRequired, EclipseNode typeNode, String staticName, AccessLevel level, Collection<EclipseNode> fields, ASTNode source) {
 		if (staticConstrRequired) {
-			MethodDeclaration staticConstr = createStaticConstructor(level, staticName, typeNode, fieldsToParam, source);
+			MethodDeclaration staticConstr = createStaticConstructor(level, staticName, typeNode, fields, source);
 			injectMethod(typeNode, staticConstr);
 		}
 	}
@@ -405,7 +415,7 @@ public class HandleConstructor {
 			Argument parameter = new Argument(fieldName, fieldPos, copyType(field.type, source), Modifier.FINAL);
 			Annotation[] copyableAnnotations = findCopyableAnnotations(fieldNode);
 			if (hasNonNullAnnotations(fieldNode)) {
-				Statement nullCheck = generateNullCheck(parameter, sourceNode);
+				Statement nullCheck = generateNullCheck(parameter, sourceNode, null);
 				if (nullCheck != null) nullChecks.add(nullCheck);
 			}
 			parameter.annotations = copyAnnotations(source, copyableAnnotations);
@@ -447,14 +457,12 @@ public class HandleConstructor {
 		}
 		
 		nullChecks.addAll(assigns);
-		constructor.statements = nullChecks.isEmpty() ? null : nullChecks.toArray(new Statement[nullChecks.size()]);
-		constructor.arguments = params.isEmpty() ? null : params.toArray(new Argument[params.size()]);
+		constructor.statements = nullChecks.isEmpty() ? null : nullChecks.toArray(new Statement[0]);
+		constructor.arguments = params.isEmpty() ? null : params.toArray(new Argument[0]);
 		
 		/* Generate annotations that must  be put on the generated method, and attach them. */ {
 			Annotation[] constructorProperties = null;
-			if (addConstructorProperties && !isLocalType(type)) {
-				constructorProperties = createConstructorProperties(source, fieldsToParam);
-			}
+			if (addConstructorProperties && !isLocalType(type)) constructorProperties = createConstructorProperties(source, fieldsToParam);
 			
 			constructor.annotations = copyAnnotations(source,
 				onConstructor.toArray(new Annotation[0]),
@@ -524,8 +532,13 @@ public class HandleConstructor {
 		
 		constructor.modifiers = toEclipseModifier(level) | ClassFileConstants.AccStatic;
 		TypeDeclaration typeDecl = (TypeDeclaration) type.get();
-		constructor.returnType = EclipseHandlerUtil.namePlusTypeParamsToTypeReference(typeDecl.name, typeDecl.typeParameters, p);
+		constructor.returnType = EclipseHandlerUtil.namePlusTypeParamsToTypeReference(type, typeDecl.typeParameters, p);
 		constructor.annotations = null;
+		if (getCheckerFrameworkVersion(type).generateUnique()) {
+			int len = constructor.returnType.getTypeName().length;
+			constructor.returnType.annotations = new Annotation[len][];
+			constructor.returnType.annotations[len - 1] = new Annotation[] {generateNamedAnnotation(source, CheckerFrameworkVersion.NAME__UNIQUE)};
+		}
 		constructor.selector = name.toCharArray();
 		constructor.thrownExceptions = null;
 		constructor.typeParameters = copyTypeParams(((TypeDeclaration) type.get()).typeParameters, source);
@@ -550,10 +563,11 @@ public class HandleConstructor {
 			params.add(parameter);
 		}
 		
-		statement.arguments = assigns.isEmpty() ? null : assigns.toArray(new Expression[assigns.size()]);
-		constructor.arguments = params.isEmpty() ? null : params.toArray(new Argument[params.size()]);
+		statement.arguments = assigns.isEmpty() ? null : assigns.toArray(new Expression[0]);
+		constructor.arguments = params.isEmpty() ? null : params.toArray(new Argument[0]);
 		constructor.statements = new Statement[] { new ReturnStatement(statement, (int) (p >> 32), (int)p) };
 		
+		createRelevantNonNullAnnotation(type, constructor);
 		constructor.traverse(new SetGeneratedByVisitor(source), typeDecl.scope);
 		return constructor;
 	}

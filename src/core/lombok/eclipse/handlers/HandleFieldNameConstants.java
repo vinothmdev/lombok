@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2018 The Project Lombok Authors.
+ * Copyright (C) 2014-2019 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,15 +27,7 @@ import static lombok.eclipse.handlers.EclipseHandlerUtil.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import lombok.AccessLevel;
-import lombok.ConfigurationKeys;
-import lombok.core.AST.Kind;
-import lombok.core.AnnotationValues;
-import lombok.eclipse.Eclipse;
-import lombok.eclipse.EclipseAnnotationHandler;
-import lombok.eclipse.EclipseNode;
-import lombok.experimental.FieldNameConstants;
-
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.AllocationExpression;
 import org.eclipse.jdt.internal.compiler.ast.Annotation;
@@ -51,9 +43,23 @@ import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
 import org.mangosdk.spi.ProviderFor;
 
+import lombok.AccessLevel;
+import lombok.ConfigurationKeys;
+import lombok.core.AST.Kind;
+import lombok.core.AnnotationValues;
+import lombok.core.configuration.IdentifierName;
+import lombok.core.handlers.HandlerUtil;
+import lombok.eclipse.Eclipse;
+import lombok.eclipse.EclipseAnnotationHandler;
+import lombok.eclipse.EclipseNode;
+import lombok.eclipse.handlers.EclipseHandlerUtil.MemberExistsResult;
+import lombok.experimental.FieldNameConstants;
+
 @ProviderFor(EclipseAnnotationHandler.class)
 public class HandleFieldNameConstants extends EclipseAnnotationHandler<FieldNameConstants> {
-	public void generateFieldNameConstantsForType(EclipseNode typeNode, EclipseNode errorNode, AccessLevel level, boolean asEnum, String innerTypeName, boolean onlyExplicit) {
+	private static final IdentifierName FIELDS = IdentifierName.valueOf("Fields");
+
+	public void generateFieldNameConstantsForType(EclipseNode typeNode, EclipseNode errorNode, AccessLevel level, boolean asEnum, IdentifierName innerTypeName, boolean onlyExplicit, boolean uppercase) {
 		TypeDeclaration typeDecl = null;
 		if (typeNode.get() instanceof TypeDeclaration) typeDecl = (TypeDeclaration) typeNode.get();
 		
@@ -74,7 +80,7 @@ public class HandleFieldNameConstants extends EclipseAnnotationHandler<FieldName
 		if (qualified.isEmpty()) {
 			errorNode.addWarning("No fields qualify for @FieldNameConstants, therefore this annotation does nothing");
 		} else {
-			createInnerTypeFieldNameConstants(typeNode, errorNode, errorNode.get(), level, qualified, asEnum, innerTypeName);
+			createInnerTypeFieldNameConstants(typeNode, errorNode, errorNode.get(), level, qualified, asEnum, innerTypeName, uppercase);
 		}
 	}
 	
@@ -88,7 +94,7 @@ public class HandleFieldNameConstants extends EclipseAnnotationHandler<FieldName
 		return filterField(fieldDecl);
 	}
 	
-	public void handle(AnnotationValues<FieldNameConstants> annotation, Annotation ast, EclipseNode annotationNode) {
+	@Override public void handle(AnnotationValues<FieldNameConstants> annotation, Annotation ast, EclipseNode annotationNode) {
 		handleExperimentalFlagUsage(annotationNode, ConfigurationKeys.FIELD_NAME_CONSTANTS_FLAG_USAGE, "@FieldNameConstants");
 		
 		EclipseNode node = annotationNode.up();
@@ -107,29 +113,38 @@ public class HandleFieldNameConstants extends EclipseAnnotationHandler<FieldName
 			return;
 		}
 		
-		String innerTypeName = annotationInstance.innerTypeName();
-		if (innerTypeName.isEmpty()) innerTypeName = annotationNode.getAst().readConfiguration(ConfigurationKeys.FIELD_NAME_CONSTANTS_INNER_TYPE_NAME);
-		if (innerTypeName == null || innerTypeName.isEmpty()) innerTypeName = "Fields";
+		IdentifierName innerTypeName;
+		try {
+			innerTypeName = IdentifierName.valueOf(annotationInstance.innerTypeName());
+		} catch(IllegalArgumentException e) {
+			annotationNode.addError("InnerTypeName " + annotationInstance.innerTypeName() + " is not a valid Java identifier.");
+			return;
+		}
+		if (innerTypeName == null) innerTypeName = annotationNode.getAst().readConfiguration(ConfigurationKeys.FIELD_NAME_CONSTANTS_INNER_TYPE_NAME);
+		if (innerTypeName == null) innerTypeName = FIELDS;
+		Boolean uppercase = annotationNode.getAst().readConfiguration(ConfigurationKeys.FIELD_NAME_CONSTANTS_UPPERCASE);
+		if (uppercase == null) uppercase = false;
 		
-		generateFieldNameConstantsForType(node, annotationNode, level, asEnum, innerTypeName, annotationInstance.onlyExplicitlyIncluded());
+		generateFieldNameConstantsForType(node, annotationNode, level, asEnum, innerTypeName, annotationInstance.onlyExplicitlyIncluded(), uppercase);
 	}
 	
-	private void createInnerTypeFieldNameConstants(EclipseNode typeNode, EclipseNode errorNode, ASTNode source, AccessLevel level, List<EclipseNode> fields, boolean asEnum, String innerTypeName) {
+	private void createInnerTypeFieldNameConstants(EclipseNode typeNode, EclipseNode errorNode, ASTNode source, AccessLevel level, List<EclipseNode> fields, boolean asEnum, IdentifierName innerTypeName, boolean uppercase) {
 		if (fields.isEmpty()) return;
 		
+		ASTVisitor generatedByVisitor = new SetGeneratedByVisitor(source);
 		TypeDeclaration parent = (TypeDeclaration) typeNode.get();
-		EclipseNode fieldsType = findInnerClass(typeNode, innerTypeName);
+		EclipseNode fieldsType = findInnerClass(typeNode, innerTypeName.getName());
 		boolean genConstr = false, genClinit = false;
-		char[] name = innerTypeName.toCharArray();
-		TypeDeclaration generatedInnerType = null;
+		char[] name = innerTypeName.getCharArray();
 		if (fieldsType == null) {
-			generatedInnerType = new TypeDeclaration(parent.compilationResult);
+			TypeDeclaration generatedInnerType = new TypeDeclaration(parent.compilationResult);
 			generatedInnerType.bits |= Eclipse.ECLIPSE_DO_NOT_TOUCH_FLAG;
-			generatedInnerType.modifiers = toEclipseModifier(level) | (asEnum ? ClassFileConstants.AccEnum : ClassFileConstants.AccStatic | ClassFileConstants.AccFinal);
+			generatedInnerType.modifiers = toEclipseModifier(level) | (asEnum ? ClassFileConstants.AccEnum : (ClassFileConstants.AccStatic | ClassFileConstants.AccFinal));
 			generatedInnerType.name = name;
 			fieldsType = injectType(typeNode, generatedInnerType);
 			genConstr = true;
 			genClinit = asEnum;
+			generatedInnerType.traverse(generatedByVisitor, ((TypeDeclaration) typeNode.get()).scope);
 		} else {
 			TypeDeclaration builderTypeDeclaration = (TypeDeclaration) fieldsType.get();
 			if (asEnum && (builderTypeDeclaration.modifiers & ClassFileConstants.AccEnum) == 0) {
@@ -146,8 +161,6 @@ public class HandleFieldNameConstants extends EclipseAnnotationHandler<FieldName
 		if (genConstr) {
 			ConstructorDeclaration constructor = new ConstructorDeclaration(parent.compilationResult);
 			constructor.selector = name;
-			constructor.declarationSourceStart = constructor.sourceStart = source.sourceStart;
-			constructor.declarationSourceEnd = constructor.sourceEnd = source.sourceEnd;
 			constructor.modifiers = ClassFileConstants.AccPrivate;
 			ExplicitConstructorCall superCall = new ExplicitConstructorCall(0);
 			superCall.sourceStart = source.sourceStart;
@@ -157,33 +170,41 @@ public class HandleFieldNameConstants extends EclipseAnnotationHandler<FieldName
 			if (!asEnum) constructor.statements = new Statement[0];
 			injectMethod(fieldsType, constructor);
 		}
+		
+		Clinit cli = null;
 		if (genClinit) {
-			Clinit cli = new Clinit(parent.compilationResult);
+			cli = new Clinit(parent.compilationResult);
 			injectMethod(fieldsType, cli);
 		}
-
 		
 		for (EclipseNode fieldNode : fields) {
 			FieldDeclaration field = (FieldDeclaration) fieldNode.get();
 			char[] fName = field.name;
+			if (uppercase) fName = HandlerUtil.camelCaseToConstant(new String(fName)).toCharArray();
 			if (fieldExists(new String(fName), fieldsType) != MemberExistsResult.NOT_EXISTS) continue;
 			int pS = source.sourceStart, pE = source.sourceEnd;
 			long p = (long) pS << 32 | pE;
 			FieldDeclaration constantField = new FieldDeclaration(fName, pS, pE);
 			constantField.bits |= Eclipse.ECLIPSE_DO_NOT_TOUCH_FLAG;
-			constantField.modifiers = asEnum ? 0 : ClassFileConstants.AccPublic | ClassFileConstants.AccStatic | ClassFileConstants.AccFinal;
-			constantField.type = asEnum ? null : new QualifiedTypeReference(TypeConstants.JAVA_LANG_STRING, new long[] {p, p, p});
 			if (asEnum) {
 				AllocationExpression ac = new AllocationExpression();
 				ac.enumConstant = constantField;
 				ac.sourceStart = source.sourceStart;
 				ac.sourceEnd = source.sourceEnd;
 				constantField.initialization = ac;
+				constantField.modifiers = 0;
+				((TypeDeclaration) fieldsType.get()).enumConstantsCounter++;
 			} else {
+				constantField.type = new QualifiedTypeReference(TypeConstants.JAVA_LANG_STRING, new long[] {p, p, p});
 				constantField.initialization = new StringLiteral(field.name, pS, pE, 0);
+				constantField.modifiers = ClassFileConstants.AccPublic | ClassFileConstants.AccStatic | ClassFileConstants.AccFinal;
 			}
-			constantField.traverse(new SetGeneratedByVisitor(source), null);
 			injectField(fieldsType, constantField);
+			constantField.traverse(generatedByVisitor, ((TypeDeclaration) fieldsType.get()).initializerScope);
+		}
+		
+		if (genClinit) {
+			cli.traverse(generatedByVisitor, ((TypeDeclaration) fieldsType.get()).scope);
 		}
 	}
 }

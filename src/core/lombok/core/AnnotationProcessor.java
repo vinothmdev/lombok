@@ -26,8 +26,9 @@ import static lombok.core.Augments.ClassLoader_lombokAlreadyAddedTo;
 import java.io.File;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -83,10 +84,11 @@ public class AnnotationProcessor extends AbstractProcessor {
 		
 		for (Class<?> procEnvClass = procEnv.getClass(); procEnvClass != null; procEnvClass = procEnvClass.getSuperclass()) {
 			try {
-				Field field = Permit.getField(procEnvClass, "delegate");
-				Object delegate = field.get(procEnv);
-				
-				return tryRecursivelyObtainJavacProcessingEnvironment((ProcessingEnvironment) delegate);
+				Object delegate = tryGetDelegateField(procEnvClass, procEnv);
+				if (delegate == null) delegate = tryGetProcessingEnvField(procEnvClass, procEnv);
+				if (delegate == null) delegate = tryGetProxyDelegateToField(procEnvClass, procEnv);
+
+				if (delegate != null) return tryRecursivelyObtainJavacProcessingEnvironment((ProcessingEnvironment) delegate);
 			} catch (final Exception e) {
 				// no valid delegate, try superclass
 			}
@@ -95,11 +97,45 @@ public class AnnotationProcessor extends AbstractProcessor {
 		return null;
 	}
 	
+	/**
+	 * Gradle incremental processing
+	 */
+	private static Object tryGetDelegateField(Class<?> delegateClass, Object instance) {
+		try {
+			return Permit.getField(delegateClass, "delegate").get(instance);
+		} catch (Exception e) {
+			return null;
+		}
+	}
+	
+	/**
+	 * Kotlin incremental processing
+	 */
+	private static Object tryGetProcessingEnvField(Class<?> delegateClass, Object instance) {
+		try {
+			return Permit.getField(delegateClass, "processingEnv").get(instance);
+		} catch (Exception e) {
+			return null;
+		}
+	}
+	
+	/**
+	 * InteliJ >= 2020.3
+	 */
+	private static Object tryGetProxyDelegateToField(Class<?> delegateClass, Object instance) {
+		try {
+			InvocationHandler handler = Proxy.getInvocationHandler(instance);
+			return Permit.getField(handler.getClass(), "val$delegateTo").get(handler);
+		} catch (Exception e) {
+			return null;
+		}
+	}
+	
 	static class JavacDescriptor extends ProcessorDescriptor {
 		private Processor processor;
 		
 		@Override String getName() {
-			return "sun/apple javac 1.6";
+			return "OpenJDK javac";
 		}
 		
 		@Override boolean want(ProcessingEnvironment procEnv, List<String> delayedWarnings) {
@@ -112,7 +148,7 @@ public class AnnotationProcessor extends AbstractProcessor {
 			
 			try {
 				ClassLoader classLoader = findAndPatchClassLoader(javacProcEnv);
-				processor = (Processor) Class.forName("lombok.javac.apt.LombokProcessor", false, classLoader).newInstance();
+				processor = (Processor) Class.forName("lombok.javac.apt.LombokProcessor", false, classLoader).getConstructor().newInstance();
 			} catch (Exception e) {
 				delayedWarnings.add("You found a bug in lombok; lombok.javac.apt.LombokProcessor is not available. Lombok will not run during this compilation: " + trace(e));
 				return false;
@@ -138,7 +174,7 @@ public class AnnotationProcessor extends AbstractProcessor {
 				if (!ClassLoader_lombokAlreadyAddedTo.getAndSet(environmentClassLoader, true)) {
 					Method m = Permit.getMethod(environmentClassLoader.getClass(), "addURL", URL.class);
 					URL selfUrl = new File(ClassRootFinder.findClassRootOfClass(AnnotationProcessor.class)).toURI().toURL();
-					m.invoke(environmentClassLoader, selfUrl);
+					Permit.invoke(m, environmentClassLoader, selfUrl);
 				}
 			}
 			

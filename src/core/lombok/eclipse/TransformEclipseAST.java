@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2018 The Project Lombok Authors.
+ * Copyright (C) 2009-2020 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,9 @@ package lombok.eclipse;
 import static lombok.eclipse.handlers.EclipseHandlerUtil.*;
 
 import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 import lombok.ConfigurationKeys;
 import lombok.core.LombokConfiguration;
@@ -39,6 +42,7 @@ import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.LocalDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
 
 /**
@@ -62,6 +66,7 @@ public class TransformEclipseAST {
 	
 	public static boolean disableLombok = false;
 	private static final HistogramTracker lombokTracker;
+	private static Map<CompilationUnitDeclaration, State> transformationStates = Collections.synchronizedMap(new WeakHashMap<CompilationUnitDeclaration, State>());
 	
 	static {
 		String v = System.getProperty("lombok.histogram");
@@ -129,6 +134,30 @@ public class TransformEclipseAST {
 	}
 	
 	/**
+	 * Check if lombok already handled the given AST. This method will return
+	 * <code>true</code> once for diet mode and once for full mode.
+	 * 
+	 * The reason for this is that Eclipse invokes the transform method multiple
+	 * times during compilation and it is enough to transform it once and not
+	 * repeat the whole thing over and over again.
+	 * 
+	 * @param ast The AST node belonging to the compilation unit (java speak for a single source file).
+	 * @return <code>true</code> if this AST was already handled by lombok.
+	 */
+	public static boolean alreadyTransformed(CompilationUnitDeclaration ast) {
+		State state = transformationStates.get(ast);
+		
+		if (state == State.FULL) return true;
+		if (state == State.DIET) {
+			if (!EclipseAST.isComplete(ast)) return true;
+			transformationStates.put(ast, State.FULL);
+		} else {
+			transformationStates.put(ast, State.DIET);
+		}
+		return false;
+	}
+	
+	/**
 	 * This method is called immediately after Eclipse finishes building a CompilationUnitDeclaration, which is
 	 * the top-level AST node when Eclipse parses a source file. The signature is 'magic' - you should not
 	 * change it!
@@ -143,6 +172,7 @@ public class TransformEclipseAST {
 		if (disableLombok) return;
 		
 		if (Symbols.hasSymbol("lombok.disable")) return;
+		if (alreadyTransformed(ast)) return;
 		
 		// Do NOT abort if (ast.bits & ASTNode.HasAllMethodBodies) != 0 - that doesn't work.
 		
@@ -236,5 +266,15 @@ public class TransformEclipseAST {
 			CompilationUnitDeclaration top = (CompilationUnitDeclaration) annotationNode.top().get();
 			nextPriority = Math.min(nextPriority, handlers.handleAnnotation(top, annotationNode, annotation, priority));
 		}
+		
+		@Override public void visitAnnotationOnTypeUse(TypeReference typeUse, EclipseNode annotationNode, Annotation annotation) {
+			CompilationUnitDeclaration top = (CompilationUnitDeclaration) annotationNode.top().get();
+			nextPriority = Math.min(nextPriority, handlers.handleAnnotation(top, annotationNode, annotation, priority));
+		}
+	}
+	
+	private static enum State {
+		DIET,
+		FULL
 	}
 }

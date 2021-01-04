@@ -1,3 +1,4 @@
+import java.math.BigDecimal;
 import java.util.*;
 import lombok.val;
 
@@ -43,6 +44,7 @@ public class ValWeirdTypes<Z> {
 		val d = upper;
 		List<?> unbound = lower;
 		val e = unbound;
+		val f = unbound.get(0);
 	}
 	
 	public void testCompound() {
@@ -63,5 +65,20 @@ public class ValWeirdTypes<Z> {
 		val copy = intArray;
 		val single = multiDimArray[0];
 		val singleInt = copy[0];
+	}
+	
+	public void arraysAsList() {
+		val x = Arrays.asList(String.class, BigDecimal.class);
+		for (val y : x) {
+			
+		}
+	}
+	
+	@SuppressWarnings("all")
+	public void arraysAsList2() {
+		val x = Arrays.asList(String.class, BigDecimal.class, Comparable.class);
+		for (val y : x) {
+		
+		}
 	}
 }

@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.URL;
@@ -108,10 +109,13 @@ public class SpiLoadUtil {
 					
 					@Override public C next() {
 						try {
-							return target.cast(Class.forName(names.next(), true, fLoader).newInstance());
+							return target.cast(Class.forName(names.next(), true, fLoader).getConstructor().newInstance());
 						} catch (Exception e) {
-							if (e instanceof RuntimeException) throw (RuntimeException)e;
-							throw new RuntimeException(e);
+							Throwable t = e;
+							if (t instanceof InvocationTargetException) t = t.getCause();
+							if (t instanceof RuntimeException) throw (RuntimeException) t;
+							if (t instanceof Error) throw (Error) t;
+							throw new RuntimeException(t);
 						}
 					}
 					
@@ -125,9 +129,10 @@ public class SpiLoadUtil {
 	
 	private static void readServicesFromUrl(Collection<String> list, URL url) throws IOException {
 		InputStream in = url.openStream();
+		BufferedReader r = null;
 		try {
 			if (in == null) return;
-			BufferedReader r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+			r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
 			while (true) {
 				String line = r.readLine();
 				if (line == null) break;
@@ -139,6 +144,7 @@ public class SpiLoadUtil {
 			}
 		} finally {
 			try {
+				if (r != null) r.close();
 				if (in != null) in.close();
 			} catch (Throwable ignore) {}
 		}

@@ -10,38 +10,44 @@ final class ConstructorsWithBuilderDefaults {
 		@java.lang.SuppressWarnings("all")
 		private boolean x$set;
 		@java.lang.SuppressWarnings("all")
-		private int x;
+		private int x$value;
 		@java.lang.SuppressWarnings("all")
 		private int y;
 		@java.lang.SuppressWarnings("all")
 		ConstructorsWithBuilderDefaultsBuilder() {
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public ConstructorsWithBuilderDefaultsBuilder x(final int x) {
-			this.x = x;
+		public ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder x(final int x) {
+			this.x$value = x;
 			x$set = true;
 			return this;
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public ConstructorsWithBuilderDefaultsBuilder y(final int y) {
+		public ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder y(final int y) {
 			this.y = y;
 			return this;
 		}
 		@java.lang.SuppressWarnings("all")
 		public ConstructorsWithBuilderDefaults build() {
-			int x = this.x;
-			if (!x$set) x = ConstructorsWithBuilderDefaults.$default$x();
-			return new ConstructorsWithBuilderDefaults(x, y);
+			int x$value = this.x$value;
+			if (!this.x$set) x$value = ConstructorsWithBuilderDefaults.$default$x();
+			return new ConstructorsWithBuilderDefaults(x$value, this.y);
 		}
 		@java.lang.Override
 		@java.lang.SuppressWarnings("all")
 		public java.lang.String toString() {
-			return "ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder(x=" + this.x + ", y=" + this.y + ")";
+			return "ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder(x$value=" + this.x$value + ", y=" + this.y + ")";
 		}
 	}
 	@java.lang.SuppressWarnings("all")
-	public static ConstructorsWithBuilderDefaultsBuilder builder() {
-		return new ConstructorsWithBuilderDefaultsBuilder();
+	public static ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder builder() {
+		return new ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder();
 	}
 	@java.lang.SuppressWarnings("all")
 	public int getX() {

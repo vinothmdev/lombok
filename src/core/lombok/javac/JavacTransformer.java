@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2018 The Project Lombok Authors.
+ * Copyright (C) 2009-2019 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -21,21 +21,22 @@
  */
 package lombok.javac;
 
-import java.util.ArrayList;
+import java.util.List;
 import java.util.SortedSet;
 
 import javax.annotation.processing.Messager;
 
 import com.sun.source.util.Trees;
+import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
 import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.util.Context;
-import com.sun.tools.javac.util.List;
 
 import lombok.ConfigurationKeys;
+import lombok.core.CleanupRegistry;
 import lombok.core.LombokConfiguration;
 
 public class JavacTransformer {
@@ -55,31 +56,15 @@ public class JavacTransformer {
 		return handlers.getPrioritiesRequiringResolutionReset();
 	}
 	
-	public void transform(long priority, Context context, java.util.List<JCCompilationUnit> compilationUnitsRaw) {
-		List<JCCompilationUnit> compilationUnits;
-		if (compilationUnitsRaw instanceof List<?>) {
-			compilationUnits = (List<JCCompilationUnit>) compilationUnitsRaw;
-		} else {
-			compilationUnits = List.nil();
-			for (int i = compilationUnitsRaw.size() -1; i >= 0; i--) {
-				compilationUnits = compilationUnits.prepend(compilationUnitsRaw.get(i));
-			}
-		}
-		
-		java.util.List<JavacAST> asts = new ArrayList<JavacAST>();
-		
+	public void transform(long priority, Context context, List<JCCompilationUnit> compilationUnits, CleanupRegistry cleanup) {
 		for (JCCompilationUnit unit : compilationUnits) {
 			if (!Boolean.TRUE.equals(LombokConfiguration.read(ConfigurationKeys.LOMBOK_DISABLE, JavacAST.getAbsoluteFileLocation(unit)))) {
-				asts.add(new JavacAST(messager, context, unit));
+				JavacAST ast = new JavacAST(messager, context, unit, cleanup);
+				ast.traverse(new AnnotationVisitor(priority));
+				handlers.callASTVisitors(ast, priority);
+				if (ast.isChanged()) LombokOptions.markChanged(context, (JCCompilationUnit) ast.top().get());
 			}
 		}
-		
-		for (JavacAST ast : asts) {
-			ast.traverse(new AnnotationVisitor(priority));
-			handlers.callASTVisitors(ast, priority);
-		}
-		
-		for (JavacAST ast : asts) if (ast.isChanged()) LombokOptions.markChanged(context, (JCCompilationUnit) ast.top().get());
 	}
 	
 	private class AnnotationVisitor extends JavacASTAdapter {
@@ -110,6 +95,11 @@ public class JavacTransformer {
 		}
 		
 		@Override public void visitAnnotationOnLocal(JCVariableDecl local, JavacNode annotationNode, JCAnnotation annotation) {
+			JCCompilationUnit top = (JCCompilationUnit) annotationNode.top().get();
+			handlers.handleAnnotation(top, annotationNode, annotation, priority);
+		}
+		
+		@Override public void visitAnnotationOnTypeUse(JCTree typeUse, JavacNode annotationNode, JCAnnotation annotation) {
 			JCCompilationUnit top = (JCCompilationUnit) annotationNode.top().get();
 			handlers.handleAnnotation(top, annotationNode, annotation, priority);
 		}

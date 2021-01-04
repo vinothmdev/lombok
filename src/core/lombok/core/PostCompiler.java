@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2013 The Project Lombok Authors.
+ * Copyright (C) 2010-2019 The Project Lombok Authors.
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class PostCompiler {
 	private PostCompiler() {/* prevent instantiation*/};
@@ -45,7 +46,9 @@ public final class PostCompiler {
 					previous = next;
 				}
 			} catch (Exception e) {
-				diagnostics.addWarning(String.format("Error during the transformation of '%s'; post-compiler '%s' caused an exception: %s", fileName, transformation.getClass().getName(), e));
+				StringWriter sw = new StringWriter();
+				e.printStackTrace(new PrintWriter(sw, true));
+				diagnostics.addError(String.format("Error during the transformation of '%s'; post-compiler '%s' caused an exception: %s", fileName, transformation.getClass().getName(), sw));
 			}
 		}
 		return previous;
@@ -59,21 +62,32 @@ public final class PostCompiler {
 			transformations = Collections.emptyList();
 			StringWriter sw = new StringWriter();
 			e.printStackTrace(new PrintWriter(sw, true));
-			diagnostics.addWarning("Could not load post-compile transformers: " + e.getMessage() + "\n" + sw.toString());
+			diagnostics.addError("Could not load post-compile transformers: " + e.getMessage() + "\n" + sw.toString());
 		}
 	}
 	
 	public static OutputStream wrapOutputStream(final OutputStream originalStream, final String fileName, final DiagnosticsReceiver diagnostics) throws IOException {
 		if (System.getProperty("lombok.disablePostCompiler", null) != null) return originalStream;
+		
+		// close() can be called more than once and should be idempotent, therefore, ensure we never transform more than once.
+		final AtomicBoolean closed = new AtomicBoolean();
+		
 		return new ByteArrayOutputStream() {
 			@Override public void close() throws IOException {
+				if (closed.getAndSet(true)) {
+					originalStream.close();
+					return;
+				}
+				
 				// no need to call super
 				byte[] original = toByteArray();
 				byte[] copy = null;
-				try {
-					copy = applyTransformations(original, fileName, diagnostics);
-				} catch (Exception e) {
-					diagnostics.addWarning(String.format("Error during the transformation of '%s'; no post-compilation has been applied", fileName));
+				if (original.length > 0) {
+					try {
+						copy = applyTransformations(original, fileName, diagnostics);
+					} catch (Exception e) {
+						diagnostics.addWarning(String.format("Error during the transformation of '%s'; no post-compilation has been applied", fileName));
+					}
 				}
 				
 				if (copy == null) {

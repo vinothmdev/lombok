@@ -102,6 +102,16 @@ class ShadowClassLoader extends ClassLoader {
 	private final List<String> parentExclusion = new ArrayList<String>();
 	private final List<String> highlanders = new ArrayList<String>();
 	
+	private final List<ClassLoader> prependedLoaders = new ArrayList<ClassLoader>();
+	
+	public void prepend(ClassLoader loader) {
+		if (loader == null) return;
+		for (ClassLoader cl : prependedLoaders) {
+			if (cl == loader) return;
+		}
+		prependedLoaders.add(loader);
+	}
+	
 	/**
 	 * @param source The 'parent' classloader.
 	 * @param sclSuffix The suffix of the shadowed class files in our own jar. For example, if this is {@code lombok}, then the class files in your jar should be {@code foo/Bar.SCL.lombok} and not {@code foo/Bar.class}.
@@ -321,8 +331,9 @@ class ShadowClassLoader extends ClassLoader {
 	}
 	
 	private static String urlDecode(String in) {
+		final String plusFixed = in.replaceAll("\\+", "%2B");
 		try {
-			return URLDecoder.decode(in, "UTF-8");
+			return URLDecoder.decode(plusFixed, "UTF-8");
 		} catch (UnsupportedEncodingException e) {
 			throw new InternalError("UTF-8 not supported");
 		}
@@ -364,16 +375,20 @@ class ShadowClassLoader extends ClassLoader {
 			FileInputStream jar = new FileInputStream(jarLoc);
 			try {
 				ZipInputStream zip = new ZipInputStream(jar);
-				while (true) {
-					ZipEntry entry = zip.getNextEntry();
-					if (entry == null) {
-						jarLocCache.put(key, false);
-						return false;
+				try {
+					while (true) {
+						ZipEntry entry = zip.getNextEntry();
+						if (entry == null) {
+							jarLocCache.put(key, false);
+							return false;
+						}
+						if (!"META-INF/ShadowClassLoader".equals(entry.getName())) continue;
+						boolean v = sclFileContainsSuffix(zip, suffix);
+						jarLocCache.put(key, v);
+						return v;
 					}
-					if (!"META-INF/ShadowClassLoader".equals(entry.getName())) continue;
-					boolean v = sclFileContainsSuffix(zip, suffix);
-					jarLocCache.put(key, v);
-					return v;
+				} finally {
+					zip.close();
 				}
 			} finally {
 				jar.close();
@@ -436,14 +451,14 @@ class ShadowClassLoader extends ClassLoader {
 		Enumeration<URL> sec = super.getResources(name);
 		while (sec.hasMoreElements()) {
 			URL item = sec.nextElement();
-			if (!partOfShadow(item.toString(), name)) vector.add(item);
+			if (isPartOfShadowSuffix(item.toString(), name, sclSuffix)) vector.add(item);
 		}
 		
 		if (altName != null) {
 			Enumeration<URL> tern = super.getResources(altName);
 			while (tern.hasMoreElements()) {
 				URL item = tern.nextElement();
-				if (!partOfShadow(item.toString(), altName)) vector.add(item);
+				if (isPartOfShadowSuffix(item.toString(), altName, sclSuffix)) vector.add(item);
 			}
 		}
 		
@@ -524,6 +539,16 @@ class ShadowClassLoader extends ClassLoader {
 		}
 		
 		String fileNameOfClass = name.replace(".", "/") + ".class";
+		for (ClassLoader pre : prependedLoaders) {
+			try {
+				URL res = pre.getResource(fileNameOfClass);
+				if (res == null) continue;
+				return urlToDefineClass(name, res, resolve);
+			} catch (Exception e) {
+				continue;
+			}
+		}
+		
 		URL res = getResource_(fileNameOfClass, true);
 		if (res == null) {
 			if (!exclusionListMatch(fileNameOfClass)) try {
@@ -535,6 +560,10 @@ class ShadowClassLoader extends ClassLoader {
 		}
 		if (res == null) throw new ClassNotFoundException(name);
 		
+		return urlToDefineClass(name, res, resolve);
+	}
+	
+	private Class<?> urlToDefineClass(String name, URL res, boolean resolve) throws ClassNotFoundException {
 		byte[] b;
 		int p = 0;
 		try {

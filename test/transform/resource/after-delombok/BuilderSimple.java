@@ -10,7 +10,7 @@ class BuilderSimple<T> {
 		this.also = also;
 	}
 	@java.lang.SuppressWarnings("all")
-	public static class BuilderSimpleBuilder<T> {
+	protected static class BuilderSimpleBuilder<T> {
 		@java.lang.SuppressWarnings("all")
 		private int yes;
 		@java.lang.SuppressWarnings("all")
@@ -18,19 +18,25 @@ class BuilderSimple<T> {
 		@java.lang.SuppressWarnings("all")
 		BuilderSimpleBuilder() {
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public BuilderSimpleBuilder<T> yes(final int yes) {
+		public BuilderSimple.BuilderSimpleBuilder<T> yes(final int yes) {
 			this.yes = yes;
 			return this;
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public BuilderSimpleBuilder<T> also(final List<T> also) {
+		public BuilderSimple.BuilderSimpleBuilder<T> also(final List<T> also) {
 			this.also = also;
 			return this;
 		}
 		@java.lang.SuppressWarnings("all")
 		public BuilderSimple<T> build() {
-			return new BuilderSimple<T>(yes, also);
+			return new BuilderSimple<T>(this.yes, this.also);
 		}
 		@java.lang.Override
 		@java.lang.SuppressWarnings("all")
@@ -39,7 +45,7 @@ class BuilderSimple<T> {
 		}
 	}
 	@java.lang.SuppressWarnings("all")
-	public static <T> BuilderSimpleBuilder<T> builder() {
-		return new BuilderSimpleBuilder<T>();
+	protected static <T> BuilderSimple.BuilderSimpleBuilder<T> builder() {
+		return new BuilderSimple.BuilderSimpleBuilder<T>();
 	}
 }

@@ -23,51 +23,60 @@ final class ConstructorsWithBuilderDefaults<T> {
 		@java.lang.SuppressWarnings("all")
 		private boolean z$set;
 		@java.lang.SuppressWarnings("all")
-		private java.util.List<T> z;
+		private java.util.List<T> z$value;
 		@java.lang.SuppressWarnings("all")
 		private boolean x$set;
 		@java.lang.SuppressWarnings("all")
-		private T x;
+		private T x$value;
 		@java.lang.SuppressWarnings("all")
 		private T q;
 		@java.lang.SuppressWarnings("all")
 		ConstructorsWithBuilderDefaultsBuilder() {
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public ConstructorsWithBuilderDefaultsBuilder<T> z(final java.util.List<T> z) {
-			this.z = z;
+		public ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder<T> z(final java.util.List<T> z) {
+			this.z$value = z;
 			z$set = true;
 			return this;
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public ConstructorsWithBuilderDefaultsBuilder<T> x(final T x) {
-			this.x = x;
+		public ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder<T> x(final T x) {
+			this.x$value = x;
 			x$set = true;
 			return this;
 		}
+		/**
+		 * @return {@code this}.
+		 */
 		@java.lang.SuppressWarnings("all")
-		public ConstructorsWithBuilderDefaultsBuilder<T> q(final T q) {
+		public ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder<T> q(final T q) {
 			this.q = q;
 			return this;
 		}
 
 		@java.lang.SuppressWarnings("all")
 		public ConstructorsWithBuilderDefaults<T> build() {
-			java.util.List<T> z = this.z;
-			if (!z$set) z = ConstructorsWithBuilderDefaults.<T>$default$z();
-			T x = this.x;
-			if (!x$set) x = ConstructorsWithBuilderDefaults.<T>$default$x();
-			return new ConstructorsWithBuilderDefaults<T>(z, x, q);
+			java.util.List<T> z$value = this.z$value;
+			if (!this.z$set) z$value = ConstructorsWithBuilderDefaults.<T>$default$z();
+			T x$value = this.x$value;
+			if (!this.x$set) x$value = ConstructorsWithBuilderDefaults.<T>$default$x();
+			return new ConstructorsWithBuilderDefaults<T>(z$value, x$value, this.q);
 		}
 		@java.lang.Override
 		@java.lang.SuppressWarnings("all")
 		public java.lang.String toString() {
-			return "ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder(z=" + this.z + ", x=" + this.x + ", q=" + this.q + ")";
+			return "ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder(z$value=" + this.z$value + ", x$value=" + this.x$value + ", q=" + this.q + ")";
 		}
 	}
 	@java.lang.SuppressWarnings("all")
-	public static <T> ConstructorsWithBuilderDefaultsBuilder<T> builder() {
-		return new ConstructorsWithBuilderDefaultsBuilder<T>();
+	public static <T> ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder<T> builder() {
+		return new ConstructorsWithBuilderDefaults.ConstructorsWithBuilderDefaultsBuilder<T>();
 	}
 	@java.lang.SuppressWarnings("all")
 	private ConstructorsWithBuilderDefaults() {
